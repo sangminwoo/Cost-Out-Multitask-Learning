@@ -6,20 +6,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
-
-from model import build_mlp
+from mlp import build_mlp
 from utils import AverageMeter, accuracy
-from dataloader import MNISTDataset, get_dataloader
+from dataset import get_dataset
+loader import ImageLoader, get_dataloader
 import json
 
 class Trainer:
-	def __init__(
-		self,
-		args,
-		epochs=100,
-		model='resnet18',
-		optimizer='SGD',
-		verbose=True):
+	def __init__(self, args, epochs=100, model='resnet18', optimizer='SGD',	verbose=True):
 	
 		assert model in ['mlp', 'resnet18', 'resnet50', 'resnet101'], 'Can not use that model!'
 		assert optimizer in ['SGD', 'Adam'], 'Can not use that optimizer!'
@@ -27,49 +21,46 @@ class Trainer:
 		self.args = args
 		self.epochs = epochs
 		self.dropout = args.dropout
-		self.batch = args.batch
-		self.workers = args.workers
 		self.device = args.device
-		self.data = args.data
 		self.save = args.save
-		self.verbose = verbose
+		self.verbose = args.verbose
 		self.costout = args.costout
 
+		# Model
 		if model == 'mlp':
-			self.model = build_mlp(
-				in_features=1568,
-				hidden_size=2048,
-				bn_momentum=args.bn_momentum,
-				dropout=args.dropout
-			)
+			self.model = build_mlp(10, 1568, 2048, 10, args.bn_momentum, args.dropout)
 		elif model == 'resnet18':
-			self.model = torchvision.models.resnet18(
-				pretrained=False,
-				progress=True
-			)
+			self.model = torchvision.models.resnet18(pretrained=False, progress=True)
 		elif model == 'resnet50':
-			self.model = torchvision.models.resnet18(
-				pretrained=False,
-				progress=True
-			)
+			self.model = torchvision.models.resnet18(pretrained=False, progress=True)
 		elif model == 'resnet101':
-			self.model = torchvision.models.resnet101(
-				pretrained=False,
-				progress=True
-			)
-		self.model = nn.DataParallel(self.model.to(self.device))
-			
-		self.criterion = nn.CrossEntropyLoss().to(self.device)
+			self.model = torchvision.models.resnet101(pretrained=False,	progress=True)
 
+		self.model = nn.DataParallel(self.model.to(self.device))
+		self.criterion = nn.CrossEntropyLoss().to(self.device)
 		if optimizer == 'SGD':
-			self.optimizer = optim.SGD(
-				self.model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay
-			)
+			self.optimizer = optim.SGD(	self.model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 		elif optimizer == 'Adam':
-			self.optimizer = optim.Adam(
-				self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay
-			)
-		
+			self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+
+		# Dataset / DataLoader
+		if args.dataset == 'mnist':
+			train_set = get_dataset(root='./dataset/mnist', dataset='mnist', phase='train')
+			test_set = get_dataset(root='./dataset/mnist', dataset='mnist', phase='test')
+		elif args.dataset == 'cifar-10':
+			train_set = get_dataset(root='./dataset/cifar10', dataset='cifar10', phase='train')
+			test_set = get_dataset(root='./dataset/cifar10', dataset='cifar10', phase='test')
+		elif args.dataset == 'cifar-100':
+			train_set = get_dataset(root='./dataset/cifar100', dataset='cifar100', phase='train')
+			test_set = get_dataset(root='./dataset/cifar100', dataset='cifar100', phase='test')
+		elif args.dataset == 'imagenet':
+			train_set = get_dataset(root='./dataset/imagenet', dataset='imagenet', phase='train')
+			test_set = get_dataset(root='./dataset/imagenet', dataset='imagenet', phase='test')
+
+		self.train_loader = DataLoader(train_set, batch, shuffle=True, num_workers=workers, pin_memory=True)
+		self.test_loader = DataLoader(test_set, batch, shuffle=False, num_workers=workers, pin_memory=True)
+
+		# Evaluation mode
 		if args.eval and args.resume:
 			print(f'=> loading checkpoint: {args.resume}')
 			checkpoint = torch.load(args.resume)
@@ -82,20 +73,15 @@ class Trainer:
 			print(f'=> best acc: {best_acc}')
 			print(f'=> best loss: {best_loss}')
 
-	def train_val(self):
+	def train(self):
 		start_time = time.time()
-
-		train_data = MNISTDataset(data_dir=self.data, phase='train')
-		val_data = MNISTDataset(data_dir=self.data, phase='val')
-		train_loader = get_dataloader(train_data, self.batch, self.workers, phase='train')
-		val_loader = get_dataloader(val_data, self.batch, self.workers, phase='val')
 
 		best_loss = np.inf
 		best_acc = 0
 
 		for epoch in range(self.epochs):
-			self.train_one_epoch(train_loader, epoch)
-			loss, acc = self.val_one_epoch(val_loader)
+			loss, acc = self.train_one_epoch(self.train_loader, epoch)
+			# loss, acc = self.val_one_epoch(self.val_loader)
 
 			state = {'epoch': epoch + 1,
 					 'state_dict': self.model.state_dict(),
@@ -109,10 +95,6 @@ class Trainer:
 			if loss < best_loss:
 				best_loss = loss
 				torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
-
-			if acc > best_acc:
-				best_acc = acc
-				torch.save(state, os.path.join(self.save, 'best_acc.pth.tar'))
 
 		elapsed_time = time.time() - start_time
 		print('---------------------------------------'*2)
@@ -176,6 +158,8 @@ class Trainer:
 					  f'Loss {losses.val:.4f} ({losses.avg:.4f})',
 					  f'Acc {acc.val:.3f} ({acc.avg:.3f})'
 				)
+
+		return losses.avg, acc
 
 	def val_one_epoch(self, val_loader):
 		batch_time = AverageMeter()
