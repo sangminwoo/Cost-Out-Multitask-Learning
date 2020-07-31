@@ -21,7 +21,8 @@ def get_arguments():
 	parser.add_argument('-t', '--task', type=str, default='m10', help='m10: mnist+cifar-10; i100: imagenet+cifar-100')
 	parser.add_argument('--gpu', type=str, help='0; 0,1; 0,3; etc', required=True)
 	parser.add_argument('-c', '--costout', action='store_true', help='use costout')
-	parser.add_argument('-d', '--dataset', type=str, default='cifar-10', help='mnist, cifar-10, cifar-100, imagenet')
+	parser.add_argument('-d1', '--dataset1', type=str, default='cifar-10', help='mnist, cifar-10, cifar-100, imagenet')
+	parser.add_argument('-d2', '--dataset2', type=str, default='cifar-100', help='mnist, cifar-10, cifar-100, imagenet')
 	parser.add_argument('--save', type=str, default='save/', help='directory to save checkpoint')
 	parser.add_argument('-e', '--eval', dest='eval', action='store_true', help='evaluate model')
 	parser.add_argument('--resume', type=str, default='save/best_checkpoint.pth.tar', help='model to resume')
@@ -38,7 +39,7 @@ def get_arguments():
 
 	parser.add_argument('-j', '--workers', default=4, type=int, metavar='N', help='data loading workers (default: 4)')
 	parser.add_argument('-v', '--verbose', default=True, action='store_true', help='print progress')
-	parser.add_argument('--seed', default=123, type=int, help='random seed')
+	parser.add_argument('--seed', default=0, type=int, help='random seed')
 	args = parser.parse_args()
 	return args
 

@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 
 class Normalize:
     def __init__(self, mean, std):
@@ -48,6 +49,19 @@ class AverageMeter:
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+class ConvergenceCheck:
+    def __init__(self, threshold=3e-4):
+        self.threshold = threshold
+        self.prev_loss = np.inf
+
+    def coverged(self, cur_loss):
+    if self.prev_loss * (1 - self.threshold) < cur_loss:
+        self.prev_loss = cur_loss
+        return True
+    else:
+        self.prev_loss = cur_loss
+        return False
 
 def accuracy(output, target, topk=(1,)):
     with torch.no_grad():
