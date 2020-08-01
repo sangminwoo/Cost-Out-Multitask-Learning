@@ -7,8 +7,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 # Model
-from mlp_multitask import MLP, build_mlp
-from resnet_multitask import ResNet, build_resnet
+from models.mlp_multitask import MLP, build_mlp
+from models.resnet_multitask import ResNet, build_resnet
 # Dataset
 from dataset import get_dataset
 from torch.utils.data import DataLoader
@@ -29,6 +29,37 @@ class Trainer:
 		self.verbose = args.verbose
 		self.costout = args.costout
 
+		# Dataset / DataLoader
+		if args.dataset1 == 'mnist':
+			dataset1 = get_dataset(root='./data/mnist', dataset='mnist', phase='train' if not args.eval else 'test')
+			num_classes1 = 10
+		elif args.dataset1 == 'cifar-10':
+			dataset1 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train' if not args.eval else 'test')
+			num_classes1 = 10
+		elif args.dataset1 == 'cifar-100':
+			dataset1 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train' if not args.eval else 'test')
+			num_classes1 = 100
+		elif args.dataset1 == 'imagenet':
+			dataset1 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train' if not args.eval else 'test')
+			num_classes1 = 1000
+
+		if args.dataset2 == 'mnist':
+			dataset2 = get_dataset(root='./data/mnist', dataset='mnist', phase='train' if not args.eval else 'test')
+			num_classes2 = 10
+		elif args.dataset2 == 'cifar-10':
+			dataset2 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train' if not args.eval else 'test')
+			num_classes2 = 10
+		elif args.dataset2 == 'cifar-100':
+			dataset2 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train' if not args.eval else 'test')
+			num_classes2 = 100
+		elif args.dataset2 == 'imagenet':
+			dataset2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train' if not args.eval else 'test')
+			num_classes2 = 1000
+
+		print(dataset1); print(dataset2)
+		self.dataloader1 = DataLoader(dataset1, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
+		self.dataloader2 = DataLoader(dataset2, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
+
 		# Model
 		if model == 'mlp':
 			self.model = build_mlp(10, 512, 128, args.bn_momentum, args.dropout)
@@ -38,8 +69,8 @@ class Trainer:
 			self.model = build_resnet(arch='resnet50', pretrained=False)
 		elif model == 'resnet101':
 			self.model = build_resnet(arch='resnet101', pretrained=False)
-		self.fc1 = nn.Linear(128, 10)
-		self.fc2 = nn.Linear(128, 100)
+		self.fc1 = nn.Linear(512 * self.model.block.expansion, num_classes1)
+		self.fc2 = nn.Linear(512 * self.model.block.expansion, num_classes2)
 
 		self.model = nn.DataParallel(self.model.to(self.device))
 		self.fc1 = nn.DataParallel(self.fc1.to(self.device))
@@ -50,39 +81,6 @@ class Trainer:
 			self.optimizer = optim.SGD(	self.model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 		elif optimizer == 'Adam':
 			self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-
-		# Dataset / DataLoader
-		if args.dataset1 == 'mnist':
-			train_set1 = get_dataset(root='./data/mnist', dataset='mnist', phase='train')
-			test_set1 = get_dataset(root='./data/mnist', dataset='mnist', phase='test')
-		elif args.dataset1 == 'cifar-10':
-			train_set1 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train')
-			test_set1 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='test')
-		elif args.dataset1 == 'cifar-100':
-			train_set1 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train')
-			test_set1 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='test')
-		elif args.dataset1 == 'imagenet':
-			train_set1 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train')
-			test_set1 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='test')
-
-		if args.dataset2 == 'mnist':
-			train_set2 = get_dataset(root='./data/mnist', dataset='mnist', phase='train')
-			test_set2 = get_dataset(root='./data/mnist', dataset='mnist', phase='test')
-		elif args.dataset2 == 'cifar-10':
-			train_set2 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train')
-			test_set2 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='test')
-		elif args.dataset2 == 'cifar-100':
-			train_set2 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train')
-			test_set2 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='test')
-		elif args.dataset2 == 'imagenet':
-			train_set2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train')
-			test_set2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='test')
-
-		self.train_loader1 = DataLoader(train_set1, args.batch, shuffle=True, num_workers=args.workers, pin_memory=True)
-		self.test_loader1 = DataLoader(test_set1, args.batch, shuffle=False, num_workers=args.workers, pin_memory=True)
-
-		self.train_loader2 = DataLoader(train_set2, args.batch, shuffle=True, num_workers=args.workers, pin_memory=True)
-		self.test_loader2 = DataLoader(test_set2, args.batch, shuffle=False, num_workers=args.workers, pin_memory=True)
 
 		# Evaluation mode
 		if args.eval and args.resume:
@@ -131,15 +129,15 @@ class Trainer:
 
 		self.model.train()
 
-		for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.train_loader1, self.train_loader2)):
+		for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 			inputs1 = inputs1.to(self.device)
 			targets1 = targets1.to(self.device)
 			inputs2 = inputs2.to(self.device)
 			targets2 = targets2.to(self.device)
 
 			self.optimizer.zero_grad()
-			outputs1 = self.fc1(self.model(inputs1))
-			outputs2 = self.fc2(self.model(inputs2))
+			outputs1 = self.model(inputs1)
+			outputs2 = self.model(inputs2)
 
 			if self.costout and converge.check(loss):
 				rand_num = np.random.rand()
@@ -155,10 +153,10 @@ class Trainer:
 
 			loss.backward()
 			self.optimizer.step()
-			losses.update(loss.item(), inputs.size(0))
+			losses.update(loss.item(), inputs1.size(0))
 
 			if self.verbose and idx % 100 == 0:
-				print(f'Epoch: [{epoch}][{idx}/{len(train_loader)}]',
+				print(f'Epoch: [{epoch}][{idx}/{len(self.dataloader1)}]',
 					  f'Loss {losses.val:.4f} ({losses.avg:.4f})',
 				)
 
@@ -170,23 +168,23 @@ class Trainer:
 		self.model.eval()
 
 		with torch.no_grad():
-			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.val_loader1, self.val_loader2)):
+			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 				inputs1 = inputs1.to(self.device)
 				inputs2 = inputs2.to(self.device)
 				targets1 = targets1.to(self.device)
 				targets2 = targets2.to(self.device)
 			
-				outputs1 = self.fc1(self.model(inputs1))
-				outputs2 = self.fc2(self.model(inputs2))
+				outputs1 = self.model(inputs1)
+				outputs2 = self.model(inputs2)
 
 				loss1 = self.criterion(outputs1, targets1)
 				loss2 = self.criterion(outputs2, targets2)
 				loss = loss1 + loss2
 				
-				losses.update(loss.item(), inputs.size(0))
+				losses.update(loss.item(), inputs1.size(0))
 
 				if self.verbose and idx % 100 == 0:
-					print(f'Val: [{idx}/{len(val_loader)}]',
+					print(f'Val: [{idx}/{len(self.dataloader1)}]',
 					      f'Loss {losses.val:.4f} ({losses.avg:.4f})',
 					)
 
@@ -198,22 +196,22 @@ class Trainer:
 		self.model.eval()
 
 		with torch.no_grad():
-			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.test_loader1, self.test_loader2)):
+			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 				inputs1 = inputs1.to(self.device)
 				inputs2 = inputs2.to(self.device)
 				targets1 = targets1.to(self.device)
 				targets2 = targets2.to(self.device)
 		
-				outputs1 = self.fc1(self.model(inputs1))
-				outputs2 = self.fc2(self.model(inputs2))
+				outputs1 = self.model(inputs1)
+				outputs2 = self.model(inputs2)
 
 				loss1 = self.criterion(outputs1, targets1)
 				loss2 = self.criterion(outputs2, targets2)
 				loss = loss1 + loss2
 
-				losses.update(loss.item(), inputs.size(0))
+				losses.update(loss.item(), inputs1.size(0))
 
 				if self.verbose and idx % 10 == 0:
-				    print(f'Test: [{idx}/{len(test_loader)}]',
+				    print(f'Test: [{idx}/{len(self.dataloader1)}]',
 				          f'Loss {losses.val:.4f} ({losses.avg:.4f})',
 				    )

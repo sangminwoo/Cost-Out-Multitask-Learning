@@ -31,7 +31,7 @@ def get_arguments():
 	parser.add_argument('--epochs', default=100, type=int, metavar='N', help='default: 100')
 	parser.add_argument('--model', default='resnet18', type=str, help='mlp, resnet18, 50, 101')
 	parser.add_argument('--optimizer', default='SGD', type=str, help='Adam, SGD (default: SGD)')
-	parser.add_argument('--lr', type=float, default=1e-4, help='default: 1e-4')
+	parser.add_argument('--lr', type=float, default=1e-3, help='default: 1e-3')
 	parser.add_argument('--dropout', type=float, default=0., help='default: 0')
 	parser.add_argument('--bn_momentum', type=float, default=1e-2, help='batch normalization momentum (default: 1e-2)')
 	parser.add_argument('--weight_decay', '--wd', default=1e-5, type=float, metavar='W', help='default: 1e-5')

@@ -18,7 +18,7 @@ def get_dataset(root, dataset, phase):
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 
-		dataset = MNISTDataLoaer(root=root, phase=phase, transform=transforms)
+		dataset = MNISTDataLoader(root=root, phase=phase, transform=transform)
 
 	elif dataset == 'cifar10': # 60000x32x32
 		MEAN = [0.4914, 0.4822, 0.4465]
@@ -26,16 +26,19 @@ def get_dataset(root, dataset, phase):
 
 		if phase == 'train':
 			transform = transforms.Compose([
+							transforms.RandomResizedCrop(224),
 							transforms.RandomHorizontalFlip(),
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 		else:
 			transform = transforms.Compose([
+							transforms.Resize(224),
+							transforms.CenterCrop(224),
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 
 		dataset = datasets.CIFAR10(root=root, train=False if phase=='test' else True,
-									transform=transforms, download=True if not os.path.exists(root) else False)
+									transform=transform, download=True if not os.path.exists(root) else False)
 
 	elif dataset == 'cifar100': # 60000x32x32
 		MEAN = [0.5071, 0.4867, 0.4408]
@@ -43,11 +46,14 @@ def get_dataset(root, dataset, phase):
 
 		if phase == 'train':
 			transform = transforms.Compose([
+							transforms.RandomResizedCrop(224),
 							transforms.RandomHorizontalFlip(),
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 		else:
 			transform = transforms.Compose([
+							transforms.Resize(224),
+							transforms.CenterCrop(224),
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 
@@ -60,14 +66,14 @@ def get_dataset(root, dataset, phase):
 
 		if phase == 'train':
 			transform = transforms.Compose([
-							transforms.RandomResizedCrop(256),
+							transforms.RandomResizedCrop(224),
 							transforms.RandomHorizontalFlip(),
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 		else:
 			transform = transforms.Compose([
-							transforms.Resize(256),
-							transforms.CenterCrop(256),
+							transforms.Resize(224),
+							transforms.CenterCrop(224),
 							transforms.ToTensor(),
 							transforms.Normalize(mean=MEAN, std=STD)])
 

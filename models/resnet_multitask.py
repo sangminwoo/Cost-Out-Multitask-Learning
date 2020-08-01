@@ -44,7 +44,7 @@ class BasicBlock(nn.Module):
 		if self.downsample:
 			residual = self.downsample(x)
 
-		out += residual
+		out = out + residual
 		out = self.relu(out)
 
 		return out
@@ -89,6 +89,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
 	def __init__(self, block, layers, num_classes=1000):
+		self.block = block
 		self.inplanes = 64
 		super(ResNet, self).__init__()
 
@@ -104,8 +105,8 @@ class ResNet(nn.Module):
 		self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
 		self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 		self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
+		# self.avgpool = nn.AdaptiveAvgPool2d(7)
 
-		# multi-task
 		self.fc = nn.Linear(512 * block.expansion, num_classes)
 
 		for m in self.modules():
@@ -144,7 +145,6 @@ class ResNet(nn.Module):
 		x = self.avgpool(x)
 		x = x.view(x.size(0), -1)
 		# out = self.fc(x)
-
 		return x # out
 
 def build_resnet(arch='resnet50', pretrained=False, **kwargs):
