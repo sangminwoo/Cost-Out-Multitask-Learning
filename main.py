@@ -56,9 +56,7 @@ def main():
 	args.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 	mode = 'costout' if args.costout else 'baseline'
-	args.save = os.path.join(args.save,
-							 mode,
-							 args.model)
+	args.save = os.path.join(args.save, mode, args.model)
 	args.resume = os.path.join(args.save, 'best_acc.pth.tar')
 	if not os.path.exists(args.save):
 		os.makedirs(args.save)
