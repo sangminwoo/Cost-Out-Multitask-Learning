@@ -1,9 +1,10 @@
+import os
 import torch
 import numpy as np
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from mnist import MNISTDataLoaer
+from mnist import MNISTDataLoader
 
 def get_dataset(root, dataset, phase):
 	assert dataset in ['mnist', 'cifar10', 'cifar100', 'imagenet']
@@ -34,7 +35,7 @@ def get_dataset(root, dataset, phase):
 							transforms.Normalize(mean=MEAN, std=STD)])
 
 		dataset = datasets.CIFAR10(root=root, train=False if phase=='test' else True,
-									transform=transforms, download=True)
+									transform=transforms, download=True if not os.path.exists(root) else False)
 
 	elif dataset == 'cifar100': # 60000x32x32
 		MEAN = [0.5071, 0.4867, 0.4408]
@@ -51,7 +52,7 @@ def get_dataset(root, dataset, phase):
 							transforms.Normalize(mean=MEAN, std=STD)])
 
 		dataset = datasets.CIFAR100(root=root, train=False if phase=='test' else True,
-									transform=transform, download=True)
+									transform=transform, download=True if not os.path.exists(root) else False)
 
 	elif dataset == 'imagenet': # 1.4Mx?x?
 		MEAN = [0.485, 0.456, 0.406]
@@ -71,6 +72,6 @@ def get_dataset(root, dataset, phase):
 							transforms.Normalize(mean=MEAN, std=STD)])
 
 		dataset = datasets.ImageNet(root=root, train=False if phase=='test' else True,
-									transform=transform, download=True)
+									transform=transform, download=True if not os.path.exists(root) else False)
 
 	return dataset

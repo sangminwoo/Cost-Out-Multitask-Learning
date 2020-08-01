@@ -37,7 +37,7 @@ def get_arguments():
 	parser.add_argument('--weight_decay', '--wd', default=1e-5, type=float, metavar='W', help='default: 1e-5')
 	parser.add_argument('--momentum', default=0., type=float, metavar='M', help='momentum (default: 0)')
 
-	parser.add_argument('-j', '--workers', default=4, type=int, metavar='N', help='data loading workers (default: 4)')
+	parser.add_argument('-j', '--workers', default=16, type=int, metavar='N', help='data loading workers (default: 4)')
 	parser.add_argument('-v', '--verbose', default=True, action='store_true', help='print progress')
 	parser.add_argument('--seed', default=0, type=int, help='random seed')
 	args = parser.parse_args()

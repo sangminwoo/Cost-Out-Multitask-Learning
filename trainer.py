@@ -6,15 +6,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision
 # Model
 from mlp_multitask import MLP, build_mlp
 from resnet_multitask import ResNet, build_resnet
-# Dataset / DataLoader
+# Dataset
 from dataset import get_dataset
-import ImageLoader, get_dataloader
+from torch.utils.data import DataLoader
 # Validation
-from utils import AverageMeter, accuracy
+from utils import AverageMeter, ConvergenceChecker, accuracy
 
 class Trainer:
 	def __init__(self, args, epochs=100, model='resnet18', optimizer='SGD',	verbose=True):
@@ -54,30 +53,30 @@ class Trainer:
 
 		# Dataset / DataLoader
 		if args.dataset1 == 'mnist':
-			train_set1 = get_dataset(root='./dataset/mnist', dataset='mnist', phase='train')
-			test_set1 = get_dataset(root='./dataset/mnist', dataset='mnist', phase='test')
+			train_set1 = get_dataset(root='./data/mnist', dataset='mnist', phase='train')
+			test_set1 = get_dataset(root='./data/mnist', dataset='mnist', phase='test')
 		elif args.dataset1 == 'cifar-10':
-			train_set1 = get_dataset(root='./dataset/cifar10', dataset='cifar10', phase='train')
-			test_set1 = get_dataset(root='./dataset/cifar10', dataset='cifar10', phase='test')
+			train_set1 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train')
+			test_set1 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='test')
 		elif args.dataset1 == 'cifar-100':
-			train_set1 = get_dataset(root='./dataset/cifar100', dataset='cifar100', phase='train')
-			test_set1 = get_dataset(root='./dataset/cifar100', dataset='cifar100', phase='test')
+			train_set1 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train')
+			test_set1 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='test')
 		elif args.dataset1 == 'imagenet':
-			train_set1 = get_dataset(root='./dataset/imagenet', dataset='imagenet', phase='train')
-			test_set1 = get_dataset(root='./dataset/imagenet', dataset='imagenet', phase='test')
+			train_set1 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train')
+			test_set1 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='test')
 
 		if args.dataset2 == 'mnist':
-			train_set2 = get_dataset(root='./dataset/mnist', dataset='mnist', phase='train')
-			test_set2 = get_dataset(root='./dataset/mnist', dataset='mnist', phase='test')
+			train_set2 = get_dataset(root='./data/mnist', dataset='mnist', phase='train')
+			test_set2 = get_dataset(root='./data/mnist', dataset='mnist', phase='test')
 		elif args.dataset2 == 'cifar-10':
-			train_set2 = get_dataset(root='./dataset/cifar10', dataset='cifar10', phase='train')
-			test_set2 = get_dataset(root='./dataset/cifar10', dataset='cifar10', phase='test')
+			train_set2 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train')
+			test_set2 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='test')
 		elif args.dataset2 == 'cifar-100':
-			train_set2 = get_dataset(root='./dataset/cifar100', dataset='cifar100', phase='train')
-			test_set2 = get_dataset(root='./dataset/cifar100', dataset='cifar100', phase='test')
+			train_set2 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train')
+			test_set2 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='test')
 		elif args.dataset2 == 'imagenet':
-			train_set2 = get_dataset(root='./dataset/imagenet', dataset='imagenet', phase='train')
-			test_set2 = get_dataset(root='./dataset/imagenet', dataset='imagenet', phase='test')
+			train_set2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train')
+			test_set2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='test')
 
 		self.train_loader1 = DataLoader(train_set1, args.batch, shuffle=True, num_workers=args.workers, pin_memory=True)
 		self.test_loader1 = DataLoader(test_set1, args.batch, shuffle=False, num_workers=args.workers, pin_memory=True)
@@ -101,7 +100,7 @@ class Trainer:
 		best_loss = np.inf
 
 		for epoch in range(self.epochs):
-			loss = self.train_one_epoch(self.train_loader1, self.train_loader2, epoch)
+			loss = self.train_one_epoch(epoch)
 			# loss, acc = self.val_one_epoch(self.val_loader)
 
 			state = {'epoch': epoch + 1,
@@ -125,16 +124,14 @@ class Trainer:
 		print(f"=> Total elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 		print('---------------------------------------'*2)
 
-	def train_one_epoch(self, train_loader1, train_loader2, epoch):
+	def train_one_epoch(self, epoch):
 		losses = AverageMeter()
 		converge = ConvergenceChecker(threshold=1e-2)
 		loss = np.inf
 
 		self.model.train()
 
-		for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(train_loader1, train_loader2)):
-			data_time.update(time.time() - cur)
-
+		for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.train_loader1, self.train_loader2)):
 			inputs1 = inputs1.to(self.device)
 			targets1 = targets1.to(self.device)
 			inputs2 = inputs2.to(self.device)
@@ -167,13 +164,13 @@ class Trainer:
 
 		return losses.avg
 
-	def val_one_epoch(self, val_loader1, val_loader2):
+	def val_one_epoch(self):
 		losses = AverageMeter()
 
 		self.model.eval()
 
 		with torch.no_grad():
-			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(val_loader1, val_loader2)):
+			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.val_loader1, self.val_loader2)):
 				inputs1 = inputs1.to(self.device)
 				inputs2 = inputs2.to(self.device)
 				targets1 = targets1.to(self.device)
@@ -195,13 +192,13 @@ class Trainer:
 
 		return losses.avg
 
-	def test(self, test_loader1, test_loader2):
+	def test(self):
 		losses = AverageMeter()
 
 		self.model.eval()
 
 		with torch.no_grad():
-			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(test_loader1, test_loader2)):
+			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.test_loader1, self.test_loader2)):
 				inputs1 = inputs1.to(self.device)
 				inputs2 = inputs2.to(self.device)
 				targets1 = targets1.to(self.device)

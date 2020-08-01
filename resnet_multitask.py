@@ -21,7 +21,7 @@ def conv3x3(inplanes, outplanes, stride=1):
 class BasicBlock(nn.Module):
 	expansion = 1
 
-	def __init__(self, inplanes, planes, stride=1, downsample=None, use_att=False, att_mode='ours'):
+	def __init__(self, inplanes, planes, stride=1, downsample=None):
 		super(BasicBlock, self).__init__()
 		self.conv1 = conv3x3(inplanes, planes, stride)
 		self.bn1 = nn.BatchNorm2d(planes)
@@ -99,14 +99,14 @@ class ResNet(nn.Module):
 				nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 			)
 
-		self.layer1 = self._make_layer(block, 64, layers[0], stride=1, use_att=False, att_mode=att_mode)
-		self.layer2 = self._make_layer(block, 128, layers[1], stride=2, use_att=False, att_mode=att_mode)
-		self.layer3 = self._make_layer(block, 256, layers[2], stride=2, use_att=False, att_mode=att_mode)
-		self.layer4 = self._make_layer(block, 512, layers[3], stride=2, use_att=False, att_mode=att_mode)
+		self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
+		self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+		self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+		self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 		self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
 
 		# multi-task
-		self.fc = nn.Linear(512 * block.expansion, num_classes1)
+		self.fc = nn.Linear(512 * block.expansion, num_classes)
 
 		for m in self.modules():
 			if isinstance(m, nn.Conv2d):
