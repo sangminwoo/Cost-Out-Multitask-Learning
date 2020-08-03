@@ -5,8 +5,8 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 from trainer import Trainer
-from utils.logger import setup_logger
-from utils.miscellaneous import get_timestamp
+from utility.logger import setup_logger
+from utility.miscellaneous import get_timestamp
 
 def get_arguments():
 	'''
@@ -27,7 +27,6 @@ def get_arguments():
 	parser.add_argument('--gpu', type=str, help='0; 0,1; 0,3; etc', required=True)
 	parser.add_argument('--dataset1', type=str, default='cifar-10', help='mnist, cifar-10, cifar-100, imagenet')
 	parser.add_argument('--dataset2', type=str, default='cifar-100', help='mnist, cifar-10, cifar-100, imagenet')
-	parser.add_argument('--save', type=str, default='save/', help='directory to save checkpoint')
 	parser.add_argument('--checkpoint', type=str, default='checkpoint_99.pth.tar', help='model to resume')
 
 	parser.add_argument('--batch', type=int, default=64)
@@ -60,7 +59,7 @@ def main():
 	args.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 	mode = 'costout' if args.costout else 'baseline'
-	args.save = os.path.join(args.save, mode, args.model)
+	args.save = os.path.join('save', mode, args.model)
 	args.checkpoint = os.path.join(args.save, 'checkpoint_99.pth.tar') # 'best_loss.pth.tar'
 	if not os.path.exists(args.save):
 		os.makedirs(args.save)
@@ -72,10 +71,10 @@ def main():
 					  verbose=args.verbose)
 
 	if not os.path.exists("logs"):
-        os.mkdir("logs")
+		os.mkdir("logs")
 
-	logger = setup_logger("cost_out", "logs",
-		filename="{}_{}_{}.txt".format(args.mode, args_model, get_timestamp()))
+	logger = setup_logger(name="cost_out", save_dir="logs",
+		filename="{}_{}_{}.txt".format(mode, args.model, get_timestamp()))
 	logger.info(args)
 
 	if args.eval:

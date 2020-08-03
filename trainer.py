@@ -2,20 +2,21 @@ import os
 import random
 import json
 import time
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import DataLoader
 # Model
 from models.mlp_multitask import MLP, build_mlp
 from models.resnet_multitask import ResNet, build_resnet
 # Dataset
 from dataset import get_dataset
-from torch.utils.data import DataLoader
-# Validation
-from utils.train_utils import AverageMeter, ConvergenceChecker, accuracy
+# Train
+from utility.train_util import AverageMeter, ConvergenceChecker, accuracy
 
 class Trainer:
 	def __init__(self, args, epoch=100, model='resnet18', optimizer='SGD',	verbose=True):
@@ -62,8 +63,6 @@ class Trainer:
 			dataset2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train' if not args.eval else 'test')
 			num_classes2 = 1000
 
-		logger = logging.getLogger("cost_out.trainer")
-		logger.info(dataset1); logger.info(dataset2)
 		self.dataloader1 = DataLoader(dataset1, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
 		self.dataloader2 = DataLoader(dataset2, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
 
@@ -104,7 +103,7 @@ class Trainer:
 			logger.info(f"=> best acc: {self.best_acc:.4f}")
 
 	def train(self):
-		logger = logging.getLogger("scene_graph_generation.trainer")
+		logger = logging.getLogger("cost_out.trainer")
 		logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
 
 		self.converge = ConvergenceChecker(threshold=self.threshold)
@@ -141,11 +140,16 @@ class Trainer:
 		logger.info('---------------------------------------'*2)
 
 	def train_one_epoch(self, epoch):
+		logger = logging.getLogger("cost_out.trainer")
+		logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+		clock = AverageMeter()
 		losses = AverageMeter()
 		acc = AverageMeter()
+		max_iter = len(self.dataloader1)
 
 		self.model.train()
 
+		end = time.time()
 		for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 			inputs1 = inputs1.to(self.device)
 			targets1 = targets1.to(self.device)
@@ -179,16 +183,39 @@ class Trainer:
 			acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
 			acc.update(acc_all[0].item(), inputs1.size(0))
 
+			batch_time = time.time() - end
+			end = time.time()
+			clock.update(batch_time)
+
+			eta_seconds = clock.avg * (max_iter - idx) + clock.avg * max_iter * (self.end - epoch)
+			eta_string = str(timedelta(seconds=int(eta_seconds)))
+
+
+			delimeter = "   "
 			if self.verbose and idx % 100 == 0:
-				logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-						    f"Epoch [{epoch}][{idx}/{len(self.dataloader1)}]",
-						    f"Loss {losses.val:.4f} ({losses.avg:.4f})",
-						    f"Accuracy {acc.val:.4f} ({acc.avg:.4f})",
+				logger.info(
+					delimeter.join(
+						["eta: {eta}",
+						 "iter [{epoch}][{idx}/{iter}]",
+						 "loss {loss_val:.4f} ({loss_avg:.4f})",
+						 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
+					 ).format(
+					 		eta=eta_string,
+						    epoch=epoch,
+						    idx=idx,
+						    iter=max_iter,
+						    loss_val=losses.val,
+						    loss_avg=losses.avg,
+						    acc_val=acc.val,
+						    acc_avg=acc.avg)
 				)
 
 		return losses.avg, acc.avg
 
 	def val_one_epoch(self):
+		logger = logging.getLogger("cost_out.inference")
+		logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Validation")
+
 		losses = AverageMeter()
 		acc = AverageMeter()
 
@@ -215,8 +242,7 @@ class Trainer:
 				acc.update(acc_all[0].item(), inputs1.size(0))
 
 				if self.verbose and idx % 100 == 0:
-					logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-						  		f"Val: [{idx}/{len(self.dataloader1)}]",
+					logger.info(f"Val: [{idx}/{len(self.dataloader1)}]",
 					      		f"Loss {losses.val:.4f} ({losses.avg:.4f})",
 					      		f"Accuracy {acc.val:.4f} ({acc.avg:.4f})",
 					)
@@ -253,8 +279,7 @@ class Trainer:
 				acc.update(acc_all[0].item(), inputs1.size(0))
 
 				if self.verbose and idx % 10 == 0:
-				    logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-				    	  		f"Test: [{idx}/{len(self.dataloader1)}]",
+				    logger.info(f"Test: [{idx}/{len(self.dataloader1)}]",
 				          		f"Loss {losses.val:.4f} ({losses.avg:.4f})",
 				          		f"Accuracy {acc.val:.4f} ({acc.avg:.4f})",
 				    )
