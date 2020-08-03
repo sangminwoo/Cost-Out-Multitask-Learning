@@ -28,7 +28,7 @@ def get_arguments():
 	parser.add_argument('--save', type=str, default='save/', help='directory to save checkpoint')
 	parser.add_argument('--checkpoint', type=str, default='checkpoint_99.pth.tar', help='model to resume')
 
-	parser.add_argument('--batch', type=int, default=32)
+	parser.add_argument('--batch', type=int, default=64)
 	parser.add_argument('--epoch', default=100, type=int, metavar='N', help='default: 100')
 	parser.add_argument('--model', default='resnet18', type=str, help='mlp, resnet18, 50, 101')
 	parser.add_argument('--optimizer', default='SGD', type=str, help='Adam, SGD (default: SGD)')

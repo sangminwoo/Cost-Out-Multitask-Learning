@@ -1,7 +1,9 @@
 import os
 import random
-import time
 import json
+import time
+from datetime import datetime
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -30,6 +32,7 @@ class Trainer:
 		self.start = 0
 		self.end = epoch
 		self.best_loss = np.inf
+		self.best_acc = 0
 
 		# Dataset / DataLoader
 		if args.dataset1 == 'mnist':
@@ -86,25 +89,28 @@ class Trainer:
 
 		# Resume
 		if args.eval or args.resume:
-			print(f'=> loading checkpoint: {args.checkpoint}')
+			print(f"=> loading checkpoint: {args.checkpoint}")
 			checkpoint = torch.load(args.checkpoint)
 			self.start = checkpoint['epoch']
 			self.best_loss = checkpoint['best_loss']
 			self.model.load_state_dict(checkpoint['state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer'])
-			print(f'=> loaded checkpoint: (epoch {self.start})')
-			print(f'=> best loss: {self.best_loss}')
+			print(f"=> loaded checkpoint: (epoch {self.start})")
+			print(f"=> best loss: {self.best_loss}")
 
 	def train(self):
+		print(f'Training start! {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+
 		start_time = time.time()
 
 		for epoch in range(self.start, self.start+self.end):
-			loss = self.train_one_epoch(epoch)
+			loss, acc = self.train_one_epoch(epoch)
 			# loss, acc = self.val_one_epoch(self.val_loader)
 
 			state = {'epoch': epoch + 1,
 					 'state_dict': self.model.state_dict(),
 					 'best_loss': self.best_loss,
+					 'best_acc': self.best_acc,
 					 'optimizer': self.optimizer.state_dict()}
 
 			if (epoch+1) % 10 == 0:
@@ -112,22 +118,26 @@ class Trainer:
 
 			if loss < self.best_loss:
 				self.best_loss = loss
+				self.best_acc = acc
 				torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
 
 		elapsed_time = time.time() - start_time
-		mode = 'Costout' if self.costout else 'Baseline' 
 		print('---------------------------------------'*2)
-		print(f'Training finished! Model: {self.args.model}, Mode: {mode}')
-		print('---------------------------------------'*2)
-		print(f'=> Total Epoch: {self.start+self.end}')
-		print(f'=> Best Loss: {self.best_loss}')
+		print(f"Training finished! {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+		print(f"Dataset1: {self.args.dataset1}, Dataset2: {self.args.dataset2}")
+		print(f"Model: {self.args.model}, Costout: {self.costout}")
+		print("---------------------------------------"*2)
+		print(f"=> Total Epoch: {self.start+self.end}")
+		print(f"=> Best Loss: {self.best_loss}")
+		print(f"=> Best Acc: {self.best_acc}")
 		print(f"=> Total elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 		print('---------------------------------------'*2)
 
 	def train_one_epoch(self, epoch):
 		losses = AverageMeter()
+		accuracy = AverageMeter()
 		converge = ConvergenceChecker(threshold=1e-2)
-		loss = np.inf
+		loss = np.inf # for convergence check
 
 		self.model.train()
 
@@ -142,6 +152,7 @@ class Trainer:
 			outputs2 = self.model(inputs2)
 
 			if self.costout and converge.check(loss):
+				print("loss converged... using costout...")
 				rand_num = np.random.rand()
 
 				if rand_num > 0.5:
@@ -157,12 +168,19 @@ class Trainer:
 			self.optimizer.step()
 			losses.update(loss.item(), inputs1.size(0))
 
+			acc1 = accuracy(outputs1, targets1)
+			acc2 = accuracy(outputs2, targets2)
+			acc = (acc1 + acc2) / 2
+			acc.update(acc.item(), inputs1.size(0))
+
 			if self.verbose and idx % 100 == 0:
-				print(f'Epoch: [{epoch}][{idx}/{len(self.dataloader1)}]',
-					  f'Loss {losses.val:.4f} ({losses.avg:.4f})',
+				print(f"datetime.now().strftime('%Y-%m-%d %H:%M:%S')"
+					  f"Epoch: [{epoch}][{idx}/{len(self.dataloader1)}]",
+					  f"Loss {losses.val:.4f} ({losses.avg:.4f})",
+					  f"Accuracy {accuracy.val:.4f} ({accuracy.avg:.4f})",
 				)
 
-		return losses.avg
+		return losses.avg, accuracy.avg
 
 	def val_one_epoch(self):
 		losses = AverageMeter()
@@ -186,8 +204,8 @@ class Trainer:
 				losses.update(loss.item(), inputs1.size(0))
 
 				if self.verbose and idx % 100 == 0:
-					print(f'Val: [{idx}/{len(self.dataloader1)}]',
-					      f'Loss {losses.val:.4f} ({losses.avg:.4f})',
+					print(f"Val: [{idx}/{len(self.dataloader1)}]",
+					      f"Loss {losses.val:.4f} ({losses.avg:.4f})",
 					)
 
 		return losses.avg
@@ -214,6 +232,6 @@ class Trainer:
 				losses.update(loss.item(), inputs1.size(0))
 
 				if self.verbose and idx % 10 == 0:
-				    print(f'Test: [{idx}/{len(self.dataloader1)}]',
-				          f'Loss {losses.val:.4f} ({losses.avg:.4f})',
+				    print(f"Test: [{idx}/{len(self.dataloader1)}]",
+				          f"Loss {losses.val:.4f} ({losses.avg:.4f})",
 				    )
