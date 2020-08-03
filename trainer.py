@@ -15,7 +15,7 @@ from models.resnet_multitask import ResNet, build_resnet
 from dataset import get_dataset
 from torch.utils.data import DataLoader
 # Validation
-from utils import AverageMeter, ConvergenceChecker, accuracy
+from utils.train_utils import AverageMeter, ConvergenceChecker, accuracy
 
 class Trainer:
 	def __init__(self, args, epoch=100, model='resnet18', optimizer='SGD',	verbose=True):
@@ -29,6 +29,7 @@ class Trainer:
 		self.save = args.save
 		self.verbose = args.verbose
 		self.costout = args.costout
+		self.threshold = args.threshold
 		self.start = 0
 		self.end = epoch
 		self.best_loss = np.inf
@@ -61,7 +62,8 @@ class Trainer:
 			dataset2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train' if not args.eval else 'test')
 			num_classes2 = 1000
 
-		print(dataset1); print(dataset2)
+		logger = logging.getLogger("cost_out.trainer")
+		logger.info(dataset1); logger.info(dataset2)
 		self.dataloader1 = DataLoader(dataset1, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
 		self.dataloader2 = DataLoader(dataset2, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
 
@@ -89,21 +91,26 @@ class Trainer:
 
 		# Resume
 		if args.eval or args.resume:
-			print(f"=> loading checkpoint: {args.checkpoint}")
+			logger.info(f"=> loading checkpoint: {args.checkpoint}")
 			checkpoint = torch.load(args.checkpoint)
 			self.start = checkpoint['epoch']
+			self.end = self.end + self.start
 			self.best_loss = checkpoint['best_loss']
+			self.best_acc = checkpoint['best_acc']
 			self.model.load_state_dict(checkpoint['state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer'])
-			print(f"=> loaded checkpoint: (epoch {self.start})")
-			print(f"=> best loss: {self.best_loss}")
+			logger.info(f"=> loaded checkpoint: (epoch {self.start})")
+			logger.info(f"=> best loss: {self.best_loss:.4f}")
+			logger.info(f"=> best acc: {self.best_acc:.4f}")
 
 	def train(self):
-		print(f'Training start! {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}')
+		logger = logging.getLogger("scene_graph_generation.trainer")
+		logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
 
+		self.converge = ConvergenceChecker(threshold=self.threshold)
 		start_time = time.time()
 
-		for epoch in range(self.start, self.start+self.end):
+		for epoch in range(self.start, self.end):
 			loss, acc = self.train_one_epoch(epoch)
 			# loss, acc = self.val_one_epoch(self.val_loader)
 
@@ -122,22 +129,20 @@ class Trainer:
 				torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
 
 		elapsed_time = time.time() - start_time
-		print('---------------------------------------'*2)
-		print(f"Training finished! {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-		print(f"Dataset1: {self.args.dataset1}, Dataset2: {self.args.dataset2}")
-		print(f"Model: {self.args.model}, Costout: {self.costout}")
-		print("---------------------------------------"*2)
-		print(f"=> Total Epoch: {self.start+self.end}")
-		print(f"=> Best Loss: {self.best_loss}")
-		print(f"=> Best Acc: {self.best_acc}")
-		print(f"=> Total elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
-		print('---------------------------------------'*2)
+		logger.info('---------------------------------------'*2)
+		logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
+		logger.info(f"Dataset1: {self.args.dataset1}, Dataset2: {self.args.dataset2}")
+		logger.info(f"Model: {self.args.model}, Costout: {self.costout}")
+		logger.info("---------------------------------------"*2)
+		logger.info(f"=> Total Epoch: {self.end}")
+		logger.info(f"=> Best Loss: {self.best_loss:.4f}")
+		logger.info(f"=> Best Acc: {self.best_acc:.4f}")
+		logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
+		logger.info('---------------------------------------'*2)
 
 	def train_one_epoch(self, epoch):
 		losses = AverageMeter()
-		accuracy = AverageMeter()
-		converge = ConvergenceChecker(threshold=1e-2)
-		loss = np.inf # for convergence check
+		acc = AverageMeter()
 
 		self.model.train()
 
@@ -151,15 +156,16 @@ class Trainer:
 			outputs1 = self.model(inputs1)
 			outputs2 = self.model(inputs2)
 
-			if self.costout and converge.check(loss):
-				print("loss converged... using costout...")
-				rand_num = np.random.rand()
+			if self.costout and self.converge.check(losses.avg):
+				# print("loss converged... using costout...")
+				rand = np.random.rand()
 
-				if rand_num > 0.5:
+				if rand > 0.5:
 					loss = self.criterion(outputs1, targets1)
 				else:
 					loss = self.criterion(outputs2, targets2)
 			else:
+				# print('baseline')
 				loss1 = self.criterion(outputs1, targets1)
 				loss2 = self.criterion(outputs2, targets2)
 				loss = loss1 + loss2
@@ -170,20 +176,21 @@ class Trainer:
 
 			acc1 = accuracy(outputs1, targets1)
 			acc2 = accuracy(outputs2, targets2)
-			acc = (acc1 + acc2) / 2
-			acc.update(acc.item(), inputs1.size(0))
+			acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
+			acc.update(acc_all[0].item(), inputs1.size(0))
 
 			if self.verbose and idx % 100 == 0:
-				print(f"datetime.now().strftime('%Y-%m-%d %H:%M:%S')"
-					  f"Epoch: [{epoch}][{idx}/{len(self.dataloader1)}]",
-					  f"Loss {losses.val:.4f} ({losses.avg:.4f})",
-					  f"Accuracy {accuracy.val:.4f} ({accuracy.avg:.4f})",
+				logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+						    f"Epoch [{epoch}][{idx}/{len(self.dataloader1)}]",
+						    f"Loss {losses.val:.4f} ({losses.avg:.4f})",
+						    f"Accuracy {acc.val:.4f} ({acc.avg:.4f})",
 				)
 
-		return losses.avg, accuracy.avg
+		return losses.avg, acc.avg
 
 	def val_one_epoch(self):
 		losses = AverageMeter()
+		acc = AverageMeter()
 
 		self.model.eval()
 
@@ -202,16 +209,26 @@ class Trainer:
 				loss = loss1 + loss2
 				
 				losses.update(loss.item(), inputs1.size(0))
+				acc1 = accuracy(outputs1, targets1)
+				acc2 = accuracy(outputs2, targets2)
+				acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
+				acc.update(acc_all[0].item(), inputs1.size(0))
 
 				if self.verbose and idx % 100 == 0:
-					print(f"Val: [{idx}/{len(self.dataloader1)}]",
-					      f"Loss {losses.val:.4f} ({losses.avg:.4f})",
+					logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+						  		f"Val: [{idx}/{len(self.dataloader1)}]",
+					      		f"Loss {losses.val:.4f} ({losses.avg:.4f})",
+					      		f"Accuracy {acc.val:.4f} ({acc.avg:.4f})",
 					)
 
 		return losses.avg
 
 	def test(self):
+		logger = logging.getLogger("cost_out.inference")
+		logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation start!")
+
 		losses = AverageMeter()
+		acc = AverageMeter()
 
 		self.model.eval()
 
@@ -230,8 +247,14 @@ class Trainer:
 				loss = loss1 + loss2
 
 				losses.update(loss.item(), inputs1.size(0))
+				acc1 = accuracy(outputs1, targets1)
+				acc2 = accuracy(outputs2, targets2)
+				acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
+				acc.update(acc_all[0].item(), inputs1.size(0))
 
 				if self.verbose and idx % 10 == 0:
-				    print(f"Test: [{idx}/{len(self.dataloader1)}]",
-				          f"Loss {losses.val:.4f} ({losses.avg:.4f})",
+				    logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+				    	  		f"Test: [{idx}/{len(self.dataloader1)}]",
+				          		f"Loss {losses.val:.4f} ({losses.avg:.4f})",
+				          		f"Accuracy {acc.val:.4f} ({acc.avg:.4f})",
 				    )

@@ -51,7 +51,7 @@ class AverageMeter:
         self.avg = self.sum / self.count
 
 class ConvergenceChecker:
-    def __init__(self, threshold=1e-2):
+    def __init__(self, threshold=1e-4):
         self.threshold = threshold
         self.prev_loss = np.inf
 
@@ -59,7 +59,7 @@ class ConvergenceChecker:
         if cur_loss == np.inf:
             return False
             
-        if self.prev_loss * (1 - self.threshold) < cur_loss:
+        if self.prev_loss * (1 - self.threshold) < cur_loss < self.prev_loss:
             self.prev_loss = cur_loss
             return True
         else:

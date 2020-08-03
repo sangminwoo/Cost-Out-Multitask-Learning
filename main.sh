@@ -15,10 +15,11 @@ dropout=0
 bn_momentum=1e-2
 weight_decay=1e-5
 momentum=0
+threshold=1e-4
 workers=16
 seed=0
 
-# --resume
+# if you want to resume checkpoint, use "--resume"
 
 if [ ${mode} == 0 ]; then
     echo "(Baseline)"
@@ -26,7 +27,7 @@ if [ ${mode} == 0 ]; then
     python main.py --gpu ${gpu} --dataset1 ${dataset1} --dataset2 ${dataset2} \
     --save ${save} --checkpoint ${checkpoint} --batch ${batch} --epoch ${epoch} \
     --model ${model} --optimizer ${optimizer} --lr ${lr} --dropout ${dropout} --bn_momentum ${bn_momentum} \
-    --weight_decay ${weight_decay} --momentum ${momentum} --workers ${workers} --verbose --seed ${seed}
+    --weight_decay ${weight_decay} --momentum ${momentum} --threshold ${threshold} --workers ${workers} --verbose --seed ${seed}
     
     python main.py --eval --gpu ${gpu} --dataset1 ${dataset1} --dataset2 ${dataset2} \
     --save ${save} --checkpoint ${checkpoint} --resume ${resume} --batch ${batch} --epoch ${epoch} \
@@ -39,7 +40,7 @@ elif [ ${mode} == 1 ]; then
     python main.py --costout --gpu ${gpu} --dataset1 ${dataset1} --dataset2 ${dataset2} \
     --save ${save} --checkpoint ${checkpoint} --batch ${batch} --epoch ${epoch} \
     --model ${model} --optimizer ${optimizer} --lr ${lr} --dropout ${dropout} --bn_momentum ${bn_momentum} \
-    --weight_decay ${weight_decay} --momentum ${momentum} --workers ${workers} --verbose --seed ${seed}
+    --weight_decay ${weight_decay} --momentum ${momentum} --threshold ${threshold} --workers ${workers} --verbose --seed ${seed}
 
     python main.py --eval --costout --gpu ${gpu} --dataset1 ${dataset1} --dataset2 ${dataset2} \
     --save ${save} --checkpoint ${checkpoint} --resume ${resume} --batch ${batch} --epoch ${epoch} \
