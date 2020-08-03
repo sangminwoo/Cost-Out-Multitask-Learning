@@ -16,18 +16,20 @@ from torch.utils.data import DataLoader
 from utils import AverageMeter, ConvergenceChecker, accuracy
 
 class Trainer:
-	def __init__(self, args, epochs=100, model='resnet18', optimizer='SGD',	verbose=True):
+	def __init__(self, args, epoch=100, model='resnet18', optimizer='SGD',	verbose=True):
 	
 		assert model in ['mlp', 'resnet18', 'resnet50', 'resnet101'], 'model not available!'
 		assert optimizer in ['SGD', 'Adam'], 'optimizer not available!'
 
 		self.args = args
-		self.epochs = epochs
 		self.dropout = args.dropout
 		self.device = args.device
 		self.save = args.save
 		self.verbose = args.verbose
 		self.costout = args.costout
+		self.start = 0
+		self.end = epoch
+		self.best_loss = np.inf
 
 		# Dataset / DataLoader
 		if args.dataset1 == 'mnist':
@@ -82,43 +84,43 @@ class Trainer:
 		elif optimizer == 'Adam':
 			self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-		# Evaluation mode
-		if args.eval and args.resume:
-			print(f'=> loading checkpoint: {args.resume}')
-			checkpoint = torch.load(args.resume)
-			epoch = checkpoint['epoch']
-			best_loss = checkpoint['best_loss']
+		# Resume
+		if args.eval or args.resume:
+			print(f'=> loading checkpoint: {args.checkpoint}')
+			checkpoint = torch.load(args.checkpoint)
+			self.start = checkpoint['epoch']
+			self.best_loss = checkpoint['best_loss']
 			self.model.load_state_dict(checkpoint['state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer'])
-			print(f'=> loaded checkpoint: (epoch {epoch})')
-			print(f'=> best loss: {best_loss}')
+			print(f'=> loaded checkpoint: (epoch {self.start})')
+			print(f'=> best loss: {self.best_loss}')
 
 	def train(self):
 		start_time = time.time()
-		best_loss = np.inf
 
-		for epoch in range(self.epochs):
+		for epoch in range(self.start, self.start+self.end):
 			loss = self.train_one_epoch(epoch)
 			# loss, acc = self.val_one_epoch(self.val_loader)
 
 			state = {'epoch': epoch + 1,
 					 'state_dict': self.model.state_dict(),
-					 'best_loss': best_loss,
+					 'best_loss': self.best_loss,
 					 'optimizer': self.optimizer.state_dict()}
 
 			if (epoch+1) % 10 == 0:
 				torch.save(state, os.path.join(self.save, 'checkpoint_{}.pth.tar'.format(epoch)))
 
-			if loss < best_loss:
-				best_loss = loss
+			if loss < self.best_loss:
+				self.best_loss = loss
 				torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
 
 		elapsed_time = time.time() - start_time
+		mode = 'Costout' if self.costout else 'Baseline' 
 		print('---------------------------------------'*2)
-		print(f'Training finished! Model: {self.args.model}, Mode: {self.args.mode}')
+		print(f'Training finished! Model: {self.args.model}, Mode: {mode}')
 		print('---------------------------------------'*2)
-		print(f'=> Total Epochs: {self.epochs}')
-		print(f'=> Best Loss: {best_loss}')
+		print(f'=> Total Epoch: {self.start+self.end}')
+		print(f'=> Best Loss: {self.best_loss}')
 		print(f"=> Total elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 		print('---------------------------------------'*2)
 

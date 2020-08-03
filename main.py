@@ -10,25 +10,26 @@ def get_arguments():
 	'''
 	train:
 		(Baseline) python main.py --gpu 0,1,2,3
-		(Costout) python main.py --gpu 0,1,2,3 -c
+		(Costout) python main.py --gpu 0,1,2,3 -costout
 	
 	evaluate:
-		(Baseline) python main.py --gpu 0,1,2,3 -e
-		(Costout) python main.py --gpu 0,1,2,3 -c -e
+		(Baseline) python main.py --gpu 0,1,2,3 --eval
+		(Costout) python main.py --gpu 0,1,2,3 --costout --eval
 	'''
 	parser = argparse.ArgumentParser(description='CostOut (Experimental)')
 	# parser.add_argument('-n', '--number', type=int, default=2, help='number of tasks')
-	parser.add_argument('-t', '--task', type=str, default='m10', help='m10: mnist+cifar-10; i100: imagenet+cifar-100')
+	# parser.add_argument('-t', '--task', type=str, default='m10', help='m10: mnist+cifar-10; i100: imagenet+cifar-100')
+	parser.add_argument('--costout', action='store_true', help='use costout')
+	parser.add_argument('--eval', dest='eval', action='store_true', help='evaluate model')
+	parser.add_argument('--resume', action='store_true', help='resume checkpoint')
 	parser.add_argument('--gpu', type=str, help='0; 0,1; 0,3; etc', required=True)
-	parser.add_argument('-c', '--costout', action='store_true', help='use costout')
-	parser.add_argument('-d1', '--dataset1', type=str, default='cifar-10', help='mnist, cifar-10, cifar-100, imagenet')
-	parser.add_argument('-d2', '--dataset2', type=str, default='cifar-100', help='mnist, cifar-10, cifar-100, imagenet')
+	parser.add_argument('--dataset1', type=str, default='cifar-10', help='mnist, cifar-10, cifar-100, imagenet')
+	parser.add_argument('--dataset2', type=str, default='cifar-100', help='mnist, cifar-10, cifar-100, imagenet')
 	parser.add_argument('--save', type=str, default='save/', help='directory to save checkpoint')
-	parser.add_argument('-e', '--eval', dest='eval', action='store_true', help='evaluate model')
-	parser.add_argument('--resume', type=str, default='save/best_checkpoint.pth.tar', help='model to resume')
+	parser.add_argument('--checkpoint', type=str, default='checkpoint_99.pth.tar', help='model to resume')
 
-	parser.add_argument('-b', '--batch', type=int, default=32)
-	parser.add_argument('--epochs', default=100, type=int, metavar='N', help='default: 100')
+	parser.add_argument('--batch', type=int, default=32)
+	parser.add_argument('--epoch', default=100, type=int, metavar='N', help='default: 100')
 	parser.add_argument('--model', default='resnet18', type=str, help='mlp, resnet18, 50, 101')
 	parser.add_argument('--optimizer', default='SGD', type=str, help='Adam, SGD (default: SGD)')
 	parser.add_argument('--lr', type=float, default=1e-3, help='default: 1e-3')
@@ -57,12 +58,12 @@ def main():
 
 	mode = 'costout' if args.costout else 'baseline'
 	args.save = os.path.join(args.save, mode, args.model)
-	args.resume = os.path.join(args.save, 'best_acc.pth.tar')
+	args.checkpoint = os.path.join(args.save, 'checkpoint_99.pth.tar') # 'best_loss.pth.tar'
 	if not os.path.exists(args.save):
 		os.makedirs(args.save)
 
 	trainer = Trainer(args,
-					  epochs=args.epochs,
+					  epoch=args.epoch,
 					  model=args.model,
 					  optimizer=args.optimizer,
 					  verbose=args.verbose)
