@@ -21,7 +21,7 @@ seed=0
 # if you want to resume checkpoint, use "--resume"
 
 if [ ${mode} == 0 ]; then
-    echo "(Baseline)"
+    # echo "(Baseline)"
 
     python main.py --gpu ${gpu} --dataset1 ${dataset1} --dataset2 ${dataset2} \
     --checkpoint ${checkpoint} --batch ${batch} --epoch ${epoch} \
@@ -34,7 +34,7 @@ if [ ${mode} == 0 ]; then
     --weight_decay ${weight_decay} --momentum ${momentum} --workers ${workers} --verbose --seed ${seed}
 
 elif [ ${mode} == 1 ]; then
-    echo "(Costout)"
+    # echo "(Costout)"
 
     python main.py --costout --gpu ${gpu} --dataset1 ${dataset1} --dataset2 ${dataset2} \
     --checkpoint ${checkpoint} --batch ${batch} --epoch ${epoch} \
