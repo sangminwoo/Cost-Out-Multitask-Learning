@@ -4,46 +4,31 @@ import random
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
+from lib.config import cfg
 from lib.trainer import Trainer
 from lib.utils.logger import setup_logger
-from lib.utils.miscellaneous import get_timestamp
+from lib.utils.miscellaneous import get_timestamp, save_config
 
 def get_arguments():
 	parser = argparse.ArgumentParser(description='CostOut (Experimental)')
 	# parser.add_argument('-n', '--number', type=int, default=2, help='number of tasks')
 	# parser.add_argument('-t', '--task', type=str, default='m10', help='m10: mnist+cifar-10; i100: imagenet+cifar-100')
-	parser.add_argument('--costout', action='store_true', help='use costout')
-	parser.add_argument('--eval', dest='eval', action='store_true', help='evaluate model')
-	parser.add_argument('--resume', action='store_true', help='resume checkpoint')
 	parser.add_argument('--gpu', type=str, help='0; 0,1; 0,3; etc', required=True)
-	parser.add_argument('--dataset1', type=str, default='cifar-10', help='mnist, cifar-10, cifar-100, imagenet')
-	parser.add_argument('--dataset2', type=str, default='cifar-100', help='mnist, cifar-10, cifar-100, imagenet')
-	parser.add_argument('--checkpoint', type=str, default='checkpoint_99.pth.tar', help='model to resume')
-
-	parser.add_argument('--batch', type=int, default=64)
-	parser.add_argument('--epoch', default=100, type=int, metavar='N', help='default: 100')
-	parser.add_argument('--model', default='resnet18', type=str, help='mlp, resnet18, 50, 101')
-	parser.add_argument('--optimizer', default='SGD', type=str, help='Adam, SGD (default: SGD)')
-	parser.add_argument('--lr', type=float, default=1e-3, help='default: 1e-3')
-	parser.add_argument('--dropout', type=float, default=0., help='default: 0')
-	parser.add_argument('--bn_momentum', type=float, default=1e-2, help='batch normalization momentum (default: 1e-2)')
-	parser.add_argument('--weight_decay', '--wd', default=1e-5, type=float, metavar='W', help='default: 1e-5')
-	parser.add_argument('--momentum', default=0., type=float, metavar='M', help='momentum (default: 0)')
-	parser.add_argument('--threshold', default=1e-4, type=float, help='convergence threshold (default: 1e-4)')
-
-	parser.add_argument('-j', '--workers', default=16, type=int, metavar='N', help='data loading workers (default: 4)')
-	parser.add_argument('-v', '--verbose', default=True, action='store_true', help='print progress')
-	parser.add_argument('--seed', default=0, type=int, help='random seed')
+	parser.add_argument('--costout', action='store_true', help='use costout')
+	parser.add_argument('--eval', action='store_true', help='evaluate mode')
+	parser.add_argument('--resume', action='store_true', help='resume checkpoint')
+	parser.add_argument('--cfg', default='configs/base.yaml')
 	args = parser.parse_args()
 	return args
 
 def main():
 	args = get_arguments()
+	cfg.merge_from_file(args.cfg)
 
-	if args.seed is not None:
-		random.seed(args.seed)
-		np.random.seed(args.seed)
-		torch.manual_seed(args.seed)
+	if cfg.ETC.SEED is not None:
+		random.seed(cfg.ETC.SEED)
+		np.random.seed(cfg.ETC.SEED)
+		torch.manual_seed(cfg.ETC.SEED)
 		cudnn.deterministic = True
 
 	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -51,23 +36,23 @@ def main():
 
 	mode = 'costout' if args.costout else 'baseline'
 	phase = 'eval' if args.eval else 'train'
-	args.save = os.path.join('save', mode, args.model)
+	args.save = os.path.join('save', mode, cfg.MODEL.BASE_MODEL)
 	args.checkpoint = os.path.join(args.save, 'checkpoint_99.pth.tar') # 'best_loss.pth.tar'
 	if not os.path.exists(args.save):
 		os.makedirs(args.save)
 
-	trainer = Trainer(args,
-					  epoch=args.epoch,
-					  model=args.model,
-					  optimizer=args.optimizer,
-					  verbose=args.verbose)
+	if not os.path.exists('logs'):
+		os.mkdir('logs')
 
-	if not os.path.exists("logs"):
-		os.mkdir("logs")
-
-	logger = setup_logger(name="cost_out", save_dir="logs",
-		filename="{}_{}_{}_{}.txt".format(mode, args.model, phase, get_timestamp()))
+	logger = setup_logger(name='cost_out', save_dir='logs',
+		filename='{}_{}_{}_{}.txt'.format(get_timestamp(), mode, cfg.MODEL.BASE_MODEL, phase))
 	logger.info(args)
+	logger.info('Loaded configuration file {}'.format(args.cfg))
+	output_config_path = os.path.join('logs', 'config.yml')
+	logger.info('Saving config into: {}'.format(output_config_path))
+	save_config(cfg, output_config_path)
+
+	trainer = Trainer(cfg, args)
 
 	if args.eval:
 		trainer.test()

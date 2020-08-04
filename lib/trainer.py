@@ -11,88 +11,71 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 # Model
-from models.mlp_multitask import MLP, build_mlp
-from models.resnet_multitask import ResNet, build_resnet
+from lib.models.mlp_multitask import MLP, build_mlp
+from lib.models.resnet_multitask import ResNet, build_resnet
 # Dataset
-from dataset import get_dataset
+from lib.dataset import get_dataset
 # Train
-from utility.train_utils import AverageMeter, ConvergenceChecker, accuracy
+from lib.utils.train_utils import AverageMeter, ConvergenceChecker, accuracy
 
 class Trainer:
-	def __init__(self, args, epoch=100, model='resnet18', optimizer='SGD',	verbose=True):
-	
-		assert model in ['mlp', 'resnet18', 'resnet50', 'resnet101'], 'model not available!'
-		assert optimizer in ['SGD', 'Adam'], 'optimizer not available!'
-
+	def __init__(self, cfg, args):
+		self.cfg = cfg
 		self.args = args
-		self.dropout = args.dropout
+		self.costout = args.costout
 		self.device = args.device
 		self.save = args.save
-		self.verbose = args.verbose
-		self.costout = args.costout
-		self.threshold = args.threshold
+
+		self.threshold = cfg.MODEL.CONVERGENCE_THRESHOLD
+		self.verbose = cfg.ETC.VERBOSE
+		
 		self.logger = logging.getLogger("cost_out")
 		self.start = 0
-		self.end = epoch
+		self.end = cfg.SOLVER.EPOCH
 		self.best_loss = np.inf
 		self.best_acc = 0
 
 		# Dataset / DataLoader
-		if args.dataset1 == 'mnist':
-			dataset1 = get_dataset(root='./data/mnist', dataset='mnist', phase='train' if not args.eval else 'test')
-			num_classes1 = 10
-		elif args.dataset1 == 'cifar-10':
-			dataset1 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train' if not args.eval else 'test')
-			num_classes1 = 10
-		elif args.dataset1 == 'cifar-100':
-			dataset1 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train' if not args.eval else 'test')
-			num_classes1 = 100
-		elif args.dataset1 == 'imagenet':
-			dataset1 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train' if not args.eval else 'test')
-			num_classes1 = 1000
+		dataset1 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA1),
+							   dataset=cfg.DATASET.DATA1,
+							   phase='train' if not args.eval else 'test')
+		dataset2 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA2),
+							   dataset=cfg.DATASET.DATA2,
+							   phase='train' if not args.eval else 'test')
 
-		if args.dataset2 == 'mnist':
-			dataset2 = get_dataset(root='./data/mnist', dataset='mnist', phase='train' if not args.eval else 'test')
-			num_classes2 = 10
-		elif args.dataset2 == 'cifar-10':
-			dataset2 = get_dataset(root='./data/cifar10', dataset='cifar10', phase='train' if not args.eval else 'test')
-			num_classes2 = 10
-		elif args.dataset2 == 'cifar-100':
-			dataset2 = get_dataset(root='./data/cifar100', dataset='cifar100', phase='train' if not args.eval else 'test')
-			num_classes2 = 100
-		elif args.dataset2 == 'imagenet':
-			dataset2 = get_dataset(root='./data/imagenet', dataset='imagenet', phase='train' if not args.eval else 'test')
-			num_classes2 = 1000
-
-		self.dataloader1 = DataLoader(dataset1, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
-		self.dataloader2 = DataLoader(dataset2, args.batch, shuffle=True if not args.eval else False, num_workers=args.workers, pin_memory=True)
+		self.dataloader1 = DataLoader(dataset1,
+									  batch_size=cfg.DATASET.TRAIN_BATCH_SIZE if not args.eval else cfg.DATASET.TRAIN_BATCH_SIZE,
+									  shuffle=True if not args.eval else False,
+									  num_workers=cfg.ETC.WORKERS,
+									  pin_memory=True)
+		self.dataloader2 = DataLoader(dataset2,
+									  batch_size=cfg.DATASET.TRAIN_BATCH_SIZE if not args.eval else cfg.DATASET.TRAIN_BATCH_SIZE,
+									  shuffle=True if not args.eval else False,
+									  num_workers=cfg.ETC.WORKERS,
+									  pin_memory=True)
 
 		# Model
-		if model == 'mlp':
-			self.model = build_mlp(10, 512, 128, args.bn_momentum, args.dropout)
-		elif model == 'resnet18':
-			self.model = build_resnet(arch='resnet18', pretrained=False)
-		elif model == 'resnet50':
-			self.model = build_resnet(arch='resnet50', pretrained=False)
-		elif model == 'resnet101':
-			self.model = build_resnet(arch='resnet101', pretrained=False)
-		self.fc1 = nn.Linear(512 * self.model.block.expansion, num_classes1)
-		self.fc2 = nn.Linear(512 * self.model.block.expansion, num_classes2)
+		if cfg.MODEL.BASE_MODEL == 'mlp':
+			self.model = build_mlp(10, 512, 128, cfg.SOLVER.BN_MOMENTUM, cfg.SOLVER.DROPOUT)
+		else:
+			self.model = build_resnet(arch=cfg.MODEL.BASE_MODEL)
+		self.fc1 = nn.Linear(512 * self.model.block.expansion, cfg.DATASET.NUM_CLASSES1)
+		self.fc2 = nn.Linear(512 * self.model.block.expansion, cfg.DATASET.NUM_CLASSES2)
 
 		self.model = nn.DataParallel(self.model.to(self.device))
 		self.fc1 = nn.DataParallel(self.fc1.to(self.device))
 		self.fc2 = nn.DataParallel(self.fc2.to(self.device))
 
 		self.criterion = nn.CrossEntropyLoss().to(self.device)
-		if optimizer == 'SGD':
-			self.optimizer = optim.SGD(	self.model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-		elif optimizer == 'Adam':
-			self.optimizer = optim.Adam(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+		if cfg.SOLVER.OPTIMIZER == 'SGD':
+			self.optimizer = optim.SGD(	self.model.parameters(), lr=cfg.SOLVER.LR, momentum=cfg.SOLVER.MOMENTUM, weight_decay=cfg.SOLVER.WEIGHT_DECAY)
+		elif cfg.SOLVER.OPTIMIZER == 'Adam':
+			self.optimizer = optim.Adam(self.model.parameters(), lr=cfg.SOLVER.LR, weight_decay=cfg.SOLVER.WEIGHT_DECAY)
 
 		# Resume
 		if args.eval or args.resume:
-			self.logger.info(f"=> loading checkpoint: {args.checkpoint}")
-			checkpoint = torch.load(args.checkpoint)
+			self.logger.info(f"=> loading checkpoint: {cfg.MODEL.CHECKPOINT}")
+			checkpoint = torch.load(cfg.MODEL.CHECKPOINT)
 			self.start = checkpoint['epoch']
 			self.end = self.end + self.start
 			self.best_loss = checkpoint['best_loss']
@@ -130,8 +113,8 @@ class Trainer:
 		elapsed_time = time.time() - start_time
 		self.logger.info('---------------------------------------'*2)
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
-		self.logger.info(f"Dataset1: {self.args.dataset1}, Dataset2: {self.args.dataset2}")
-		self.logger.info(f"Model: {self.args.model}, Costout: {self.costout}")
+		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
+		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Costout: {self.costout}")
 		self.logger.info("---------------------------------------"*2)
 		self.logger.info(f"=> Total Epoch: {self.end}")
 		self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
@@ -184,11 +167,11 @@ class Trainer:
 			end = time.time()
 			self.clock.update(batch_time)
 
-			eta_seconds = self.clock.avg * (max_iter - idx) + self.clock.avg * max_iter * (self.end - epoch)
-			eta_string = str(timedelta(seconds=int(eta_seconds)))
-
 			delimeter = "   "
 			if self.verbose and idx % 100 == 0:
+				eta_seconds = self.clock.avg * (max_iter-idx) + self.clock.avg * max_iter * (self.end-epoch-1)
+				eta_string = str(timedelta(seconds=int(eta_seconds)))
+
 				self.logger.info(
 					delimeter.join(
 						["eta: {eta}",
@@ -197,7 +180,7 @@ class Trainer:
 						 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
 					 ).format(
 					 		eta=eta_string,
-						    epoch=epoch,
+						    epoch=epoch+1,
 						    idx=idx,
 						    iter=max_iter,
 						    loss_val=losses.val,
@@ -300,3 +283,13 @@ class Trainer:
 							    acc_val=acc.val,
 							    acc_avg=acc.avg)
 					)
+
+		self.logger.info('---------------------------------------'*2)
+		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation finished!")
+		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
+		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Costout: {self.costout}")
+		self.logger.info("---------------------------------------"*2)
+		self.logger.info(f"=> Total Epoch: {self.end}")
+		self.logger.info(f"=> Loss: {self.losses.avg:.4f}")
+		self.logger.info(f"=> Acc: {self.acc.avg:.4f}")
+		self.logger.info('---------------------------------------'*2)
