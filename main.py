@@ -4,20 +4,11 @@ import random
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-from trainer import Trainer
-from utility.logger import setup_logger
-from utility.miscellaneous import get_timestamp
+from lib.trainer import Trainer
+from lib.utils.logger import setup_logger
+from lib.utils.miscellaneous import get_timestamp
 
 def get_arguments():
-	'''
-	train:
-		(Baseline) python main.py --gpu 0,1,2,3
-		(Costout) python main.py --gpu 0,1,2,3 -costout
-	
-	evaluate:
-		(Baseline) python main.py --gpu 0,1,2,3 --eval
-		(Costout) python main.py --gpu 0,1,2,3 --costout --eval
-	'''
 	parser = argparse.ArgumentParser(description='CostOut (Experimental)')
 	# parser.add_argument('-n', '--number', type=int, default=2, help='number of tasks')
 	# parser.add_argument('-t', '--task', type=str, default='m10', help='m10: mnist+cifar-10; i100: imagenet+cifar-100')
@@ -59,6 +50,7 @@ def main():
 	args.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 	mode = 'costout' if args.costout else 'baseline'
+	phase = 'eval' if args.eval else 'train'
 	args.save = os.path.join('save', mode, args.model)
 	args.checkpoint = os.path.join(args.save, 'checkpoint_99.pth.tar') # 'best_loss.pth.tar'
 	if not os.path.exists(args.save):
@@ -74,7 +66,7 @@ def main():
 		os.mkdir("logs")
 
 	logger = setup_logger(name="cost_out", save_dir="logs",
-		filename="{}_{}_{}.txt".format(mode, args.model, get_timestamp()))
+		filename="{}_{}_{}_{}.txt".format(mode, args.model, phase, get_timestamp()))
 	logger.info(args)
 
 	if args.eval:

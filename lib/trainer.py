@@ -104,7 +104,6 @@ class Trainer:
 			self.logger.info(f"=> best acc: {self.best_acc:.4f}")
 
 	def train(self):
-		# logger = logging.getLogger("cost_out.trainer")
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
 		self.clock = AverageMeter()
 		self.converge = ConvergenceChecker(threshold=self.threshold)
@@ -159,7 +158,7 @@ class Trainer:
 			outputs2 = self.model(inputs2)
 
 			if self.costout and self.converge.check(losses.avg):
-				# print("loss converged... using costout...")
+				# self.logger.info("loss converged... using costout...")
 				rand = np.random.rand()
 
 				if rand > 0.5:
@@ -167,7 +166,7 @@ class Trainer:
 				else:
 					loss = self.criterion(outputs2, targets2)
 			else:
-				# print('baseline')
+				# self.logger.info('baseline')
 				loss1 = self.criterion(outputs1, targets1)
 				loss2 = self.criterion(outputs2, targets2)
 				loss = loss1 + loss2
@@ -210,11 +209,11 @@ class Trainer:
 		return losses.avg, acc.avg
 
 	def val_one_epoch(self, epoch):
-		# self.logger = logging.getLogger("cost_out.inference")
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Validation")
 
 		losses = AverageMeter()
 		acc = AverageMeter()
+		max_iter = len(self.dataloader1)
 
 		self.model.eval()
 
@@ -258,11 +257,11 @@ class Trainer:
 		return losses.avg
 
 	def test(self):
-		# self.logger = logging.getLogger("cost_out.inference")
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation start!")
 
 		losses = AverageMeter()
 		acc = AverageMeter()
+		max_iter = len(self.dataloader1)
 
 		self.model.eval()
 
