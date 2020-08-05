@@ -37,7 +37,7 @@ def main():
 	mode = 'costout' if args.costout else 'baseline'
 	phase = 'eval' if args.eval else 'train'
 	args.save = os.path.join('save', mode, cfg.MODEL.BASE_MODEL)
-	args.checkpoint = os.path.join(args.save, 'checkpoint_99.pth.tar') # 'best_loss.pth.tar'
+	args.checkpoint = os.path.join(args.save, cfg.MODEL.CHECKPOINT) # 'best_loss.pth.tar'
 	if not os.path.exists(args.save):
 		os.makedirs(args.save)
 

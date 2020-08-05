@@ -44,12 +44,12 @@ class Trainer:
 							   phase='train' if not args.eval else 'test')
 
 		self.dataloader1 = DataLoader(dataset1,
-									  batch_size=cfg.DATASET.TRAIN_BATCH_SIZE if not args.eval else cfg.DATASET.TRAIN_BATCH_SIZE,
+									  batch_size=cfg.DATASET.TRAIN_BATCH_SIZE if not args.eval else cfg.DATASET.TEST_BATCH_SIZE,
 									  shuffle=True if not args.eval else False,
 									  num_workers=cfg.ETC.WORKERS,
 									  pin_memory=True)
 		self.dataloader2 = DataLoader(dataset2,
-									  batch_size=cfg.DATASET.TRAIN_BATCH_SIZE if not args.eval else cfg.DATASET.TRAIN_BATCH_SIZE,
+									  batch_size=cfg.DATASET.TRAIN_BATCH_SIZE if not args.eval else cfg.DATASET.TEST_BATCH_SIZE,
 									  shuffle=True if not args.eval else False,
 									  num_workers=cfg.ETC.WORKERS,
 									  pin_memory=True)
@@ -74,10 +74,11 @@ class Trainer:
 
 		# Resume
 		if args.eval or args.resume:
-			self.logger.info(f"=> loading checkpoint: {cfg.MODEL.CHECKPOINT}")
-			checkpoint = torch.load(cfg.MODEL.CHECKPOINT)
-			self.start = checkpoint['epoch']
-			self.end = self.end + self.start
+			self.logger.info(f"=> loading checkpoint: {args.checkpoint}")
+			checkpoint = torch.load(args.checkpoint)
+			if not args.eval:
+				self.start = checkpoint['epoch']
+				self.end = self.end + self.start
 			self.best_loss = checkpoint['best_loss']
 			self.best_acc = checkpoint['best_acc']
 			self.model.load_state_dict(checkpoint['state_dict'])
@@ -116,10 +117,10 @@ class Trainer:
 		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
 		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Costout: {self.costout}")
 		self.logger.info("---------------------------------------"*2)
+		self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 		self.logger.info(f"=> Total Epoch: {self.end}")
 		self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
 		self.logger.info(f"=> Best Acc: {self.best_acc:.4f}")
-		self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 		self.logger.info('---------------------------------------'*2)
 
 	def train_one_epoch(self, epoch):
@@ -289,7 +290,6 @@ class Trainer:
 		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
 		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Costout: {self.costout}")
 		self.logger.info("---------------------------------------"*2)
-		self.logger.info(f"=> Total Epoch: {self.end}")
-		self.logger.info(f"=> Loss: {self.losses.avg:.4f}")
-		self.logger.info(f"=> Acc: {self.acc.avg:.4f}")
+		self.logger.info(f"=> Loss: {losses.avg:.4f}")
+		self.logger.info(f"=> Acc: {acc.avg:.4f}")
 		self.logger.info('---------------------------------------'*2)

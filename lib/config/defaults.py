@@ -10,7 +10,7 @@ _C.DATASET.DATA2 = "cifar100" # 'mnist, cifar-10, cifar-100, imagenet'
 _C.DATASET.NUM_CLASSES2 = 100 # 10, 10, 100, 1000
 _C.DATASET.PATH = "data/"
 _C.DATASET.TRAIN_BATCH_SIZE = 64
-_C.DATASET.TEST_BATCH_SIZE = 1
+_C.DATASET.TEST_BATCH_SIZE = 64
 
 """======================================="""
 _C.MODEL = CfgNode()
