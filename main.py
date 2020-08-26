@@ -10,11 +10,9 @@ from lib.utils.logger import setup_logger
 from lib.utils.miscellaneous import get_timestamp, save_config
 
 def get_arguments():
-	parser = argparse.ArgumentParser(description='CostOut (Experimental)')
-	# parser.add_argument('-n', '--number', type=int, default=2, help='number of tasks')
-	# parser.add_argument('-t', '--task', type=str, default='m10', help='m10: mnist+cifar-10; i100: imagenet+cifar-100')
+	parser = argparse.ArgumentParser(description='Multitask Learning (CostOut, Filter)')
 	parser.add_argument('--gpu', type=str, help='0; 0,1; 0,3; etc', required=True)
-	parser.add_argument('--costout', action='store_true', help='use costout')
+	parser.add_argument('--mode', type=str, help='baseline; costout; filter', required=True)
 	parser.add_argument('--eval', action='store_true', help='evaluate mode')
 	parser.add_argument('--resume', action='store_true', help='resume checkpoint')
 	parser.add_argument('--cfg', default='configs/base.yaml')
@@ -34,9 +32,8 @@ def main():
 	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 	args.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-	mode = 'costout' if args.costout else 'baseline'
 	phase = 'eval' if args.eval else 'train'
-	args.save = os.path.join('save', mode, cfg.MODEL.BASE_MODEL)
+	args.save = os.path.join('save', args.mode, cfg.MODEL.BASE_MODEL)
 	args.checkpoint = os.path.join(args.save, cfg.MODEL.CHECKPOINT) # 'best_loss.pth.tar'
 	if not os.path.exists(args.save):
 		os.makedirs(args.save)
@@ -44,8 +41,8 @@ def main():
 	if not os.path.exists('logs'):
 		os.mkdir('logs')
 
-	logger = setup_logger(name='cost_out', save_dir='logs',
-		filename='{}_{}_{}_{}.txt'.format(get_timestamp(), mode, cfg.MODEL.BASE_MODEL, phase))
+	logger = setup_logger(name=args.mode, save_dir='logs',
+		filename='{}_{}_{}_{}.txt'.format(get_timestamp(), args.mode, cfg.MODEL.BASE_MODEL, phase))
 	logger.info(args)
 	logger.info('Loaded configuration file {}'.format(args.cfg))
 	output_config_path = os.path.join('logs', 'config.yml')

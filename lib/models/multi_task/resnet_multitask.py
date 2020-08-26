@@ -88,7 +88,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-	def __init__(self, block, layers, num_classes=1000):
+	def __init__(self, block, layers, num_classes1=100, num_classes2=1000):
 		self.block = block
 		self.inplanes = 64
 		super(ResNet, self).__init__()
@@ -107,7 +107,8 @@ class ResNet(nn.Module):
 		self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
 		# self.avgpool = nn.AdaptiveAvgPool2d(7)
 
-		self.fc = nn.Linear(512 * block.expansion, num_classes)
+		self.fc1 = nn.Linear(512 * block.expansion, num_classes1)
+		self.fc2 = nn.Linear(512 * block.expansion, num_classes2)
 
 		for m in self.modules():
 			if isinstance(m, nn.Conv2d):
@@ -134,18 +135,26 @@ class ResNet(nn.Module):
 
 		return nn.Sequential(*layers)
 
-	def forward(self, x):
-		x = self.conv(x)
+	def forward(self, x1, x2):
+		x1 = self.conv(x1)
+		x1 = self.layer1(x1)
+		x1 = self.layer2(x1)
+		x1 = self.layer3(x1)
+		x1 = self.layer4(x1)
+		x1 = self.avgpool(x1)
+		x1 = x1.view(x1.size(0), -1)
+		out1 = self.fc1(x1)
 
-		x = self.layer1(x)
-		x = self.layer2(x)
-		x = self.layer3(x)
-		x = self.layer4(x)
+		x2 = self.conv(x2)
+		x2 = self.layer1(x2)
+		x2 = self.layer2(x2)
+		x2 = self.layer3(x2)
+		x2 = self.layer4(x2)
+		x2 = self.avgpool(x2)
+		x2 = x2.view(x2.size(0), -1)
+		out2 = self.fc2(x2)
 
-		x = self.avgpool(x)
-		x = x.view(x.size(0), -1)
-		# out = self.fc(x)
-		return x # out
+		return out1, out2
 
 def build_resnet(arch='resnet50', pretrained=False, **kwargs):
 	assert arch in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']

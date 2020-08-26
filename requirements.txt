@@ -1,0 +1,4 @@
+numpy
+json
+yacs
+matplotlib

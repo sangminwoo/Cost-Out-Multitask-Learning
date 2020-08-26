@@ -11,8 +11,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 # Model
-from lib.models.mlp_multitask import MLP, build_mlp
-from lib.models.resnet_multitask import ResNet, build_resnet
+from lib.models.multi_task.mlp_multitask import MLP, build_mlp
+from lib.models.multi_task.resnet_multitask import ResNet, build_resnet
 # Dataset
 from lib.dataset import get_dataset
 # Train
@@ -22,14 +22,14 @@ class Trainer:
 	def __init__(self, cfg, args):
 		self.cfg = cfg
 		self.args = args
-		self.costout = args.costout
+		self.mode = args.mode
 		self.device = args.device
 		self.save = args.save
 
 		self.threshold = cfg.MODEL.CONVERGENCE_THRESHOLD
 		self.verbose = cfg.ETC.VERBOSE
 		
-		self.logger = logging.getLogger("cost_out")
+		self.logger = logging.getLogger(args.mode)
 		self.start = 0
 		self.end = cfg.SOLVER.EPOCH
 		self.best_loss = np.inf
@@ -56,19 +56,14 @@ class Trainer:
 
 		# Model
 		if cfg.MODEL.BASE_MODEL == 'mlp':
-			self.model = build_mlp(10, 512, 128, cfg.SOLVER.BN_MOMENTUM, cfg.SOLVER.DROPOUT)
+			self.model = build_mlp(args, num_layers=10, input_size=512, hidden_size=128, output_size1=100, output_size2=1000, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 		else:
-			self.model = build_resnet(arch=cfg.MODEL.BASE_MODEL)
-		self.fc1 = nn.Linear(512 * self.model.block.expansion, cfg.DATASET.NUM_CLASSES1)
-		self.fc2 = nn.Linear(512 * self.model.block.expansion, cfg.DATASET.NUM_CLASSES2)
-
+			self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes1=100, num_classes2=1000)
 		self.model = nn.DataParallel(self.model.to(self.device))
-		self.fc1 = nn.DataParallel(self.fc1.to(self.device))
-		self.fc2 = nn.DataParallel(self.fc2.to(self.device))
 
 		self.criterion = nn.CrossEntropyLoss().to(self.device)
 		if cfg.SOLVER.OPTIMIZER == 'SGD':
-			self.optimizer = optim.SGD(	self.model.parameters(), lr=cfg.SOLVER.LR, momentum=cfg.SOLVER.MOMENTUM, weight_decay=cfg.SOLVER.WEIGHT_DECAY)
+			self.optimizer = optim.SGD(self.model.parameters(), lr=cfg.SOLVER.LR, momentum=cfg.SOLVER.MOMENTUM, weight_decay=cfg.SOLVER.WEIGHT_DECAY)
 		elif cfg.SOLVER.OPTIMIZER == 'Adam':
 			self.optimizer = optim.Adam(self.model.parameters(), lr=cfg.SOLVER.LR, weight_decay=cfg.SOLVER.WEIGHT_DECAY)
 
@@ -115,7 +110,7 @@ class Trainer:
 		self.logger.info('---------------------------------------'*2)
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
 		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
-		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Costout: {self.costout}")
+		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
 		self.logger.info("---------------------------------------"*2)
 		self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 		self.logger.info(f"=> Total Epoch: {self.end}")
@@ -138,10 +133,9 @@ class Trainer:
 			targets2 = targets2.to(self.device)
 
 			self.optimizer.zero_grad()
-			outputs1 = self.model(inputs1)
-			outputs2 = self.model(inputs2)
+			outputs1, outputs2 = self.model(inputs1, inputs2)
 
-			if self.costout and self.converge.check(losses.avg):
+			if self.mode == 'costout' and self.converge.check(losses.avg):
 				# self.logger.info("loss converged... using costout...")
 				rand = np.random.rand()
 
@@ -208,8 +202,7 @@ class Trainer:
 				targets1 = targets1.to(self.device)
 				targets2 = targets2.to(self.device)
 			
-				outputs1 = self.model(inputs1)
-				outputs2 = self.model(inputs2)
+				outputs1, outputs2 = self.model(inputs1, outputs2)
 
 				loss1 = self.criterion(outputs1, targets1)
 				loss2 = self.criterion(outputs2, targets2)
@@ -256,8 +249,7 @@ class Trainer:
 				targets1 = targets1.to(self.device)
 				targets2 = targets2.to(self.device)
 		
-				outputs1 = self.model(inputs1)
-				outputs2 = self.model(inputs2)
+				outputs1, outputs2 = self.model(inputs1, inputs2)
 
 				loss1 = self.criterion(outputs1, targets1)
 				loss2 = self.criterion(outputs2, targets2)
@@ -288,7 +280,7 @@ class Trainer:
 		self.logger.info('---------------------------------------'*2)
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation finished!")
 		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
-		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Costout: {self.costout}")
+		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
 		self.logger.info("---------------------------------------"*2)
 		self.logger.info(f"=> Loss: {losses.avg:.4f}")
 		self.logger.info(f"=> Acc: {acc.avg:.4f}")
