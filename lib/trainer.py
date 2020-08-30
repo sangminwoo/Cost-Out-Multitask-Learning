@@ -56,7 +56,7 @@ class Trainer:
 
 		# Model
 		if cfg.MODEL.BASE_MODEL == 'mlp':
-			self.model = build_mlp(args, num_layers=10, input_size=512, hidden_size=128, output_size1=100, output_size2=1000, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+			self.model = build_mlp(args, num_layers=5, input_size=3*224*224, hidden_size=128, output_size1=100, output_size2=1000, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 		else:
 			self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes1=100, num_classes2=1000)
 		self.model = nn.DataParallel(self.model.to(self.device))
