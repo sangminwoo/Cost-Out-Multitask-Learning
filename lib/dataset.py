@@ -10,12 +10,12 @@ def get_dataset(root, dataset, phase):
 	assert phase in ['train', 'val', 'test']
 	
 	if dataset == 'mnist': # 60000x28x28
-		MEAN = 0.1307
-		STD = 0.3081
+		# MEAN = 0.1307
+		# STD = 0.3081
 
 		transform = transforms.Compose([
-							transforms.ToTensor(),
-							transforms.Normalize(mean=MEAN, std=STD)])
+							transforms.ToTensor()])
+							# transforms.Normalize(mean=MEAN, std=STD)])
 
 		dataset = datasets.MNIST(root=root, train=False if phase=='test' else True,
 								 transform=transform, download=True if not os.path.exists(root) else False)

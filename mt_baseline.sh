@@ -2,7 +2,7 @@
 
 gpu=0,1,2,3
 mode='mt_baseline'
-cfg='configs/mtfilter_base.yaml'
+cfg='configs/baseline_base.yaml'
 
 python main.py --gpu ${gpu} --mode ${mode} --cfg ${cfg}
 python main.py --gpu ${gpu} --mode ${mode} --cfg ${cfg} --eval --resume 

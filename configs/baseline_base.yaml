@@ -1,8 +1,8 @@
 DATASET:
-  DATA1: "cifar10"
+  DATA1: "mnist" # "mnist (28x28x1)", "cifar10 (32x32x3)", "cifar100 (32x32x3)", "imagenet"
   NUM_CLASSES1: 10
-  DATA2: "cifar100"
-  NUM_CLASSES2: 100
+  DATA2: "mnist"
+  NUM_CLASSES2: 10
   PATH: "data/"
   TRAIN_BATCH_SIZE: 128 #64
   TEST_BATCH_SIZE: 64

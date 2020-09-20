@@ -58,14 +58,14 @@ class Trainer:
 		# Model
 		if self.mode == 'st_baseline':		
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mlp(args, num_layers=5, input_size=3*224*224, hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+				self.model = build_mlp(args, num_layers=5, input_size=1*28*28, hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
-				self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes=cfg.DATASET.NUM_CLASSES1)
+				self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, pretrained=False, num_classes=cfg.DATASET.NUM_CLASSES1)
 			else:
 				pass
 		else:			
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mt_mlp(args, num_layers=5, input_size=3*224*224, hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+				self.model = build_mt_mlp(args, num_layers=5, input_size=1*28*28, hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
 				self.model = build_mt_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes1=cfg.DATASET.NUM_CLASSES1, num_classes2=cfg.DATASET.NUM_CLASSES2)
 			else:
