@@ -12,7 +12,7 @@ from lib.utils.miscellaneous import get_timestamp, save_config
 def get_arguments():
 	parser = argparse.ArgumentParser(description='Multitask Learning (CostOut, Filter)')
 	parser.add_argument('--gpu', type=str, help='0; 0,1; 0,3; etc', required=True)
-	parser.add_argument('--mode', type=str, help='baseline; costout; filter', required=True)
+	parser.add_argument('--mode', type=str, help='st_baseline; mt_baseline; mt_filter; mt_costout', required=True)
 	parser.add_argument('--eval', action='store_true', help='evaluate mode')
 	parser.add_argument('--resume', action='store_true', help='resume checkpoint')
 	parser.add_argument('--cfg', default='configs/base.yaml')

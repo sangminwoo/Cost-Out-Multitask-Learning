@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 gpu=0,1,2,3
-mode='costout'
+mode='mt_costout'
 cfg='configs/costout_base.yaml'
 
 python main.py --gpu ${gpu} --mode ${mode} --cfg ${cfg}

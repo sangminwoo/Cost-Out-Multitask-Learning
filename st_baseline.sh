@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 gpu=0,1,2,3
-mode='mt_filter'
-cfg='configs/mtfilter_base.yaml'
+mode='st_baseline'
+cfg='configs/single_base.yaml'
 
 python main.py --gpu ${gpu} --mode ${mode} --cfg ${cfg}
 python main.py --gpu ${gpu} --mode ${mode} --cfg ${cfg} --eval --resume 

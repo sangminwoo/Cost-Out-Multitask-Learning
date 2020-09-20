@@ -156,7 +156,7 @@ class ResNet(nn.Module):
 
 		return out1, out2
 
-def build_resnet(arch='resnet50', pretrained=False, **kwargs):
+def build_mt_resnet(args, arch='resnet50', pretrained=False, **kwargs):
 	assert arch in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
 	if arch == 'resnet18':

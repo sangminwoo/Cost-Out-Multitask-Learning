@@ -1,13 +1,11 @@
 DATASET:
   DATA1: "cifar10"
   NUM_CLASSES1: 10
-  DATA2: "cifar100"
-  NUM_CLASSES2: 100
   PATH: "data/"
   TRAIN_BATCH_SIZE: 128 #64
   TEST_BATCH_SIZE: 64
 MODEL:
-  BASE_MODEL: "mlp"
+  BASE_MODEL: "resnet18" # "mlp"
   CHECKPOINT: "checkpoint_1999.pth.tar"
   CONVERGENCE_THRESHOLD: 1e-4
 SOLVER:

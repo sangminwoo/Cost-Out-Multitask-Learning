@@ -4,20 +4,24 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 class MLP(nn.Module):
-    def __init__(self, num_layers, input_size, hidden_size, output_size, bn_momentum=1e-3, dropout=0.):
+    def __init__(self, args, num_layers, input_size, hidden_size, output_size, bn_momentum=1e-3, dropout=0.):
         super(MLP, self).__init__()
-        assert num_layers >= 2
-
-        self.num = num_layers
-        self.input = nn.Linear(input_size, hidden_size)
-        if num_layers > 2:
+        self.layers = num_layers
+        self.input = nn.Sequential(
+                        nn.Linear(input_size, hidden_size),
+                        nn.BatchNorm1d(num_features=hidden_size, momentum=bn_momentum),
+                        nn.ReLU(True),
+                        nn.Dropout(p=dropout)
+                    )
+        if self.layers > 2:
             self.mlp = nn.ModuleList([
                             nn.Sequential(
-                            nn.Linear(hidden_features, hidden_size),
-                            nn.BatchNorm1d(num_features=hidden_size, momentum=bn_momentum),
-                            nn.ReLU(True),
-                            nn.Dropout(p=dropout)
-                        ) for _ in range(num_layers-2)])
+                                nn.Linear(hidden_size, hidden_size),
+                                nn.BatchNorm1d(num_features=hidden_size, momentum=bn_momentum),
+                                nn.ReLU(True),
+                                nn.Dropout(p=dropout)
+                            ) for _ in range(num_layers-1)
+                       ])
 
         self.output = nn.Linear(hidden_size, output_size)
         self.softmax = nn.Softmax(dim=1)
@@ -28,15 +32,20 @@ class MLP(nn.Module):
                 m.bias.data = nn.init.constant_(m.bias.data, 0.0)
 
     def forward(self, x):
+        if len(x.shape) > 2:
+            x = x.view(x.size(0), -1)
+
         x = self.input(x)
-        if self.num > 2:
-            x = self.mlp(x)
+        if self.layers > 2:
+            for mlp in self.mlp:
+                x = mlp(x)
+
         x = self.output(x)
         out = self.softmax(x)
         return out
 
-def build_mlp(num_layers, input_size, hidden_size, output_size, bn_momentum, dropout):
-    return MLP(num_layers, input_size, hidden_size, output_size, bn_momentum, dropout)
+def build_mlp(args, num_layers, input_size, hidden_size, output_size, bn_momentum, dropout):
+    return MLP(args, num_layers, input_size, hidden_size, output_size, bn_momentum, dropout)
 
 if __name__ == '__main__':
     x = torch.randn(3, 10)

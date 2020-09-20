@@ -79,7 +79,7 @@ class MLP(nn.Module):
 
         self.out1 = nn.Linear(hidden_size, output_size1)
         self.out2 = nn.Linear(hidden_size, output_size2)
-        # self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax(dim=1)
 
         # for m in self.modules():
         #     if isinstance(m, nn.Linear):
@@ -104,10 +104,10 @@ class MLP(nn.Module):
 
         out1 = self.out1(x1)
         out2 = self.out2(x2)
-        # out = self.softmax(x)
+        out = self.softmax(x)
         return out1, out2
 
-def build_mlp(args, num_layers, input_size, hidden_size, output_size1, output_size2, bn_momentum, dropout):
+def build_mt_mlp(args, num_layers, input_size, hidden_size, output_size1, output_size2, bn_momentum, dropout):
     return MLP(args, num_layers, input_size, hidden_size, output_size1, output_size2, bn_momentum, dropout)
 
 

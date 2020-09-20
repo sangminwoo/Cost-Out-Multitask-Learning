@@ -21,7 +21,7 @@ def conv3x3(inplanes, outplanes, stride=1):
 class BasicBlock(nn.Module):
 	expansion = 1
 
-	def __init__(self, inplanes, planes, stride=1, downsample=None, use_att=False, att_mode='ours'):
+	def __init__(self, inplanes, planes, stride=1, downsample=None):
 		super(BasicBlock, self).__init__()
 		self.conv1 = conv3x3(inplanes, planes, stride)
 		self.bn1 = nn.BatchNorm2d(planes)
@@ -96,10 +96,10 @@ class ResNet(nn.Module):
 		self.relu = nn.ReLU(inplace=False)
 		self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-		self.layer1 = self._make_layer(block, 64, layers[0], stride=1, use_att=False, att_mode=att_mode)
-		self.layer2 = self._make_layer(block, 128, layers[1], stride=2, use_att=False, att_mode=att_mode)
-		self.layer3 = self._make_layer(block, 256, layers[2], stride=2, use_att=False, att_mode=att_mode)
-		self.layer4 = self._make_layer(block, 512, layers[3], stride=2, use_att=False, att_mode=att_mode)
+		self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
+		self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+		self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+		self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 		self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
 
 		self.final_fc = nn.Linear(512 * block.expansion, num_classes)
@@ -145,9 +145,9 @@ class ResNet(nn.Module):
 		x = self.avgpool(x4)
 		x = x.view(x.size(0), -1)
 		x = self.final_fc(x)
-		return x, x4
+		return x #, x4
 
-def build_resnet(arch='resnet50', pretrained=False, **kwargs):
+def build_resnet(args, arch='resnet50', pretrained=False, **kwargs):
 	assert arch in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
 
 	if arch == 'resnet18':
