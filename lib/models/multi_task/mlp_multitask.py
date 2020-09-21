@@ -12,7 +12,7 @@ class MLP(nn.Module):
         self.mlp_linear1 = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
         self.mlp_linear2 = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
 
-        if args.mode == 'filter':
+        if args.mode == 'mt_filter':
             input_linear = nn.Linear(input_size, hidden_size)
             mlp_linear = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
 
