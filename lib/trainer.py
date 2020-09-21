@@ -33,7 +33,8 @@ class Trainer:
 		self.start = 0
 		self.end = cfg.SOLVER.EPOCH
 		self.best_loss = np.inf
-		self.best_acc = 0
+		self.best_acc1 = 0
+		self.best_acc2 = 0
 
 		# Dataset / DataLoader
 		dataset1 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA1),
@@ -87,12 +88,16 @@ class Trainer:
 				self.start = checkpoint['epoch']
 				self.end = self.end + self.start
 			self.best_loss = checkpoint['best_loss']
-			self.best_acc = checkpoint['best_acc']
+			self.best_acc1 = checkpoint['best_acc1']
+			if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
+				self.best_acc2 = checkpoint['best_acc2']
 			self.model.load_state_dict(checkpoint['state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer'])
 			self.logger.info(f"=> loaded checkpoint: (epoch {self.start})")
 			self.logger.info(f"=> best loss: {self.best_loss:.4f}")
-			self.logger.info(f"=> best acc: {self.best_acc:.4f}")
+			self.logger.info(f"=> best acc1: {self.best_acc1:.4f}")
+			if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
+				self.best_acc2 = checkpoint['best_acc2']
 
 	def train(self):
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
@@ -116,7 +121,7 @@ class Trainer:
 
 				if loss < self.best_loss:
 					self.best_loss = loss
-					self.best_acc = acc
+					self.best_acc1 = acc
 					torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
 
 			elapsed_time = time.time() - start_time
@@ -128,7 +133,7 @@ class Trainer:
 			self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 			self.logger.info(f"=> Total Epoch: {self.end}")
 			self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
-			self.logger.info(f"=> Best Acc: {self.best_acc:.4f}")
+			self.logger.info(f"=> Best Acc: {self.best_acc1:.4f}")
 			self.logger.info('---------------------------------------'*2)
 		else:
 			for epoch in range(self.start, self.end):
@@ -284,23 +289,22 @@ class Trainer:
 
 	def val_one_epoch(self, epoch):
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Validation")
-
 		losses = AverageMeter()
-		acc = AverageMeter()
 		max_iter = len(self.dataloader1)
-
 		self.model.eval()
 
-		with torch.no_grad():
+		with torch.no_grad():			
 			if self.mode == 'st_baseline':
+				acc1 = AverageMeter()
+
 				for idx, (inputs1, targets1) in enumerate(self.dataloader1):
 					inputs1 = inputs1.to(self.device)
 					targets1 = targets1.to(self.device)
 					outputs1 = self.model(inputs1)
 					loss = self.criterion(outputs1, targets1)
 					losses.update(loss.item(), inputs1.size(0))
-					acc1 = accuracy(outputs1, targets1)
-					acc.update(acc1[0].item(), inputs1.size(0))
+					a1 = accuracy(outputs1, targets1)
+					acc1.update(a1[0].item(), inputs1.size(0))
 
 					delimeter = "   "
 					if self.verbose and idx % 100 == 0:
@@ -308,17 +312,20 @@ class Trainer:
 							delimeter.join(
 								["iter [{epoch}][{idx}/{iter}]",
 								 "loss {loss_val:.4f} ({loss_avg:.4f})",
-								 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
+								 "accuracy {acc1_val:.4f} ({acc1_avg:.4f})"]
 							 ).format(
 								    epoch=epoch,
 								    idx=idx,
 								    iter=max_iter,
 								    loss_val=losses.val,
 								    loss_avg=losses.avg,
-								    acc_val=acc.val,
-								    acc_avg=acc.avg)
+								    acc1_val=acc1.val,
+								    acc1_avg=acc1.avg)
 						)
 			else:
+				acc1 = AverageMeter()
+				acc2 = AverageMeter()
+
 				for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 					inputs1 = inputs1.to(self.device)
 					inputs2 = inputs2.to(self.device)
@@ -332,10 +339,10 @@ class Trainer:
 					loss = loss1 + loss2
 					
 					losses.update(loss.item(), inputs1.size(0))
-					acc1 = accuracy(outputs1, targets1)
-					acc2 = accuracy(outputs2, targets2)
-					acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
-					acc.update(acc_all[0].item(), inputs1.size(0))
+					a1 = accuracy(outputs1, targets1)
+					a2 = accuracy(outputs2, targets2)
+					acc1.update(a1[0].item(), inputs1.size(0))
+					acc2.update(a2[0].item(), inputs1.size(0))
 
 					delimeter = "   "
 					if self.verbose and idx % 100 == 0:
@@ -343,38 +350,40 @@ class Trainer:
 							delimeter.join(
 								["iter [{epoch}][{idx}/{iter}]",
 								 "loss {loss_val:.4f} ({loss_avg:.4f})",
-								 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
+								 "accuracy1 {acc1_val:.4f} ({acc1_avg:.4f})",
+								 "accuracy2 {acc2_val:.4f} ({acc2_avg:.4f})"]
 							 ).format(
 								    epoch=epoch,
 								    idx=idx,
 								    iter=max_iter,
 								    loss_val=losses.val,
 								    loss_avg=losses.avg,
-								    acc_val=acc.val,
-								    acc_avg=acc.avg)
+								    acc1_val=acc1.val,
+								    acc1_avg=acc1.avg,
+								    acc2_val=acc2.val,
+								    acc2_avg=acc2.avg)
 						)
 
 		return losses.avg
 
 	def test(self):
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation start!")
-
 		losses = AverageMeter()
-		acc = AverageMeter()
 		max_iter = len(self.dataloader1)
-
 		self.model.eval()
 
 		with torch.no_grad():
 			if self.mode == 'st_baseline':
+				acc1 = AverageMeter()
+
 				for idx, (inputs1, targets1) in enumerate(self.dataloader1):
 					inputs1 = inputs1.to(self.device)
 					targets1 = targets1.to(self.device)			
 					outputs1 = self.model(inputs1)
 					loss1 = self.criterion(outputs1, targets1)
 					losses.update(loss1.item(), inputs1.size(0))
-					acc1 = accuracy(outputs1, targets1)
-					acc.update(acc1[0].item(), inputs1.size(0))
+					a1 = accuracy(outputs1, targets1)
+					acc1.update(a1[0].item(), inputs1.size(0))
 
 					delimeter = "   "
 					if self.verbose and idx % 100 == 0:
@@ -382,16 +391,29 @@ class Trainer:
 							delimeter.join(
 								["iter [{idx}/{iter}]",
 								 "loss {loss_val:.4f} ({loss_avg:.4f})",
-								 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
+								 "accuracy {acc1_val:.4f} ({acc1_avg:.4f})"]
 							 ).format(
 								    idx=idx,
 								    iter=max_iter,
 								    loss_val=losses.val,
 								    loss_avg=losses.avg,
-								    acc_val=acc.val,
-								    acc_avg=acc.avg)
+								    acc1_val=acc1.val,
+								    acc1_avg=acc1.avg)
 						)
+				
+				self.logger.info('---------------------------------------'*2)
+				self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation finished!")
+				self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
+				self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
+				self.logger.info("---------------------------------------"*2)
+				self.logger.info(f"=> Loss: {losses.avg:.4f}")
+				self.logger.info(f"=> Acc1: {acc1.avg:.4f}")
+				self.logger.info('---------------------------------------'*2)
+
 			else:
+				acc1 = AverageMeter()
+				acc2 = AverageMeter()
+
 				for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 					inputs1 = inputs1.to(self.device)
 					inputs2 = inputs2.to(self.device)
@@ -405,10 +427,10 @@ class Trainer:
 					loss = loss1 + loss2
 
 					losses.update(loss.item(), inputs1.size(0))
-					acc1 = accuracy(outputs1, targets1)
-					acc2 = accuracy(outputs2, targets2)
-					acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
-					acc.update(acc_all[0].item(), inputs1.size(0))
+					a1 = accuracy(outputs1, targets1)
+					a2 = accuracy(outputs2, targets2)
+					acc1.update(a1[0].item(), inputs1.size(0))
+					acc2.update(a2[0].item(), inputs1.size(0))
 
 					delimeter = "   "
 					if self.verbose and idx % 100 == 0:
@@ -416,21 +438,25 @@ class Trainer:
 							delimeter.join(
 								["iter [{idx}/{iter}]",
 								 "loss {loss_val:.4f} ({loss_avg:.4f})",
-								 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
+								 "accuracy1 {acc1_val:.4f} ({acc1_avg:.4f})",
+								 "accuracy2 {acc2_val:.4f} ({acc2_avg:.4f})"]
 							 ).format(
 								    idx=idx,
 								    iter=max_iter,
 								    loss_val=losses.val,
 								    loss_avg=losses.avg,
-								    acc_val=acc.val,
-								    acc_avg=acc.avg)
+								    acc1_val=acc1.val,
+								    acc1_avg=acc1.avg,
+								    acc2_val=acc2.val,
+								    acc2_avg=acc2.avg)
 						)
 
-		self.logger.info('---------------------------------------'*2)
-		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation finished!")
-		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
-		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
-		self.logger.info("---------------------------------------"*2)
-		self.logger.info(f"=> Loss: {losses.avg:.4f}")
-		self.logger.info(f"=> Acc: {acc.avg:.4f}")
-		self.logger.info('---------------------------------------'*2)
+				self.logger.info('---------------------------------------'*2)
+				self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation finished!")
+				self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
+				self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
+				self.logger.info("---------------------------------------"*2)
+				self.logger.info(f"=> Loss: {losses.avg:.4f}")
+				self.logger.info(f"=> Acc1: {acc1.avg:.4f}")
+				self.logger.info(f"=> Acc2: {acc2.avg:.4f}")
+				self.logger.info('---------------------------------------'*2)
