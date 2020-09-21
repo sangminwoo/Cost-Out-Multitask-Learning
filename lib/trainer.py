@@ -58,14 +58,14 @@ class Trainer:
 		# Model
 		if self.mode == 'st_baseline':		
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mlp(args, num_layers=5, input_size=1*28*28, hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+				self.model = build_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1=='mnist' else 3*224*224, hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
 				self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, pretrained=False, num_classes=cfg.DATASET.NUM_CLASSES1)
 			else:
 				pass
 		else:			
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mt_mlp(args, num_layers=5, input_size=1*28*28, hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+				self.model = build_mt_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1=='mnist' else 3*224*224, hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
 				self.model = build_mt_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes1=cfg.DATASET.NUM_CLASSES1, num_classes2=cfg.DATASET.NUM_CLASSES2)
 			else:
@@ -100,47 +100,80 @@ class Trainer:
 		self.converge = ConvergenceChecker(threshold=self.threshold)
 		start_time = time.time()
 
-		for epoch in range(self.start, self.end):
-			loss, acc = self.train_one_epoch(epoch)
-			# loss, acc = self.val_one_epoch(epoch)
+		if self.mode == 'st_baseline':
+			for epoch in range(self.start, self.end):
+				loss, acc = self.train_one_epoch(epoch)
+				# loss, acc = self.val_one_epoch(epoch)
 
-			state = {'epoch': epoch + 1,
-					 'state_dict': self.model.state_dict(),
-					 'best_loss': self.best_loss,
-					 'best_acc': self.best_acc,
-					 'optimizer': self.optimizer.state_dict()}
+				state = {'epoch': epoch + 1,
+						 'state_dict': self.model.state_dict(),
+						 'best_loss': self.best_loss,
+						 'best_acc': self.best_acc,
+						 'optimizer': self.optimizer.state_dict()}
 
-			if (epoch+1) % 10 == 0:
-				torch.save(state, os.path.join(self.save, 'checkpoint_{}.pth.tar'.format(epoch)))
+				if (epoch+1) % 10 == 0:
+					torch.save(state, os.path.join(self.save, 'checkpoint_{}.pth.tar'.format(epoch)))
 
-			if loss < self.best_loss:
-				self.best_loss = loss
-				self.best_acc = acc
-				torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
+				if loss < self.best_loss:
+					self.best_loss = loss
+					self.best_acc = acc
+					torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
 
-		elapsed_time = time.time() - start_time
-		self.logger.info('---------------------------------------'*2)
-		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
-		self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}")
-		if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
+			elapsed_time = time.time() - start_time
+			self.logger.info('---------------------------------------'*2)
+			self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
+			self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}")
+			self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
+			self.logger.info("---------------------------------------"*2)
+			self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
+			self.logger.info(f"=> Total Epoch: {self.end}")
+			self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
+			self.logger.info(f"=> Best Acc: {self.best_acc:.4f}")
+			self.logger.info('---------------------------------------'*2)
+		else:
+			for epoch in range(self.start, self.end):
+				loss, acc1, acc2 = self.train_one_epoch(epoch)
+				# loss, acc1, acc2 = self.val_one_epoch(epoch)
+
+				state = {'epoch': epoch + 1,
+						 'state_dict': self.model.state_dict(),
+						 'best_loss': self.best_loss,
+						 'best_acc1': self.best_acc1,
+						 'best_acc2': self.best_acc2,
+						 'optimizer': self.optimizer.state_dict()}
+
+				if (epoch+1) % 10 == 0:
+					torch.save(state, os.path.join(self.save, 'checkpoint_{}.pth.tar'.format(epoch)))
+
+				if loss < self.best_loss:
+					self.best_loss = loss
+					self.best_acc1 = acc1
+					self.best_acc2 = acc2
+					torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
+
+			elapsed_time = time.time() - start_time
+			self.logger.info('---------------------------------------'*2)
+			self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
+			self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}")
 			self.logger.info(f"Dataset2: {self.cfg.DATASET.DATA2}")
-		self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
-		self.logger.info("---------------------------------------"*2)
-		self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
-		self.logger.info(f"=> Total Epoch: {self.end}")
-		self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
-		self.logger.info(f"=> Best Acc: {self.best_acc:.4f}")
-		self.logger.info('---------------------------------------'*2)
+			self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
+			self.logger.info("---------------------------------------"*2)
+			self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
+			self.logger.info(f"=> Total Epoch: {self.end}")
+			self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
+			self.logger.info(f"=> Best Acc1: {self.best_acc1:.4f}")
+			self.logger.info(f"=> Best Acc2: {self.best_acc2:.4f}")
+			self.logger.info('---------------------------------------'*2)		
 
 	def train_one_epoch(self, epoch):
 		losses = AverageMeter()
-		acc = AverageMeter()
 		max_iter = len(self.dataloader1)
-
 		self.model.train()
-
 		end = time.time()
+
 		if self.mode == 'st_baseline':
+			acc = AverageMeter()
+
 			for idx, (inputs1, targets1) in enumerate(self.dataloader1):
 				inputs1 = inputs1.to(self.device)
 				targets1 = targets1.to(self.device)
@@ -151,8 +184,8 @@ class Trainer:
 				self.optimizer.step()
 				losses.update(loss.item(), inputs1.size(0))
 
-				acc1 = accuracy(outputs1, targets1)
-				acc.update(acc1[0].item(), inputs1.size(0))
+				a1 = accuracy(outputs1, targets1)
+				acc.update(a1[0].item(), inputs1.size(0))
 
 				batch_time = time.time() - end
 				end = time.time()
@@ -179,7 +212,13 @@ class Trainer:
 							    acc_val=acc.val,
 							    acc_avg=acc.avg)
 					)
+
+			return losses.avg, acc.avg
+
 		else:
+			acc1 = AverageMeter()
+			acc2 = AverageMeter()
+
 			for idx, ((inputs1, targets1), (inputs2, targets2)) in enumerate(zip(self.dataloader1, self.dataloader2)):
 				inputs1 = inputs1.to(self.device)
 				targets1 = targets1.to(self.device)
@@ -207,10 +246,10 @@ class Trainer:
 				self.optimizer.step()
 				losses.update(loss.item(), inputs1.size(0))
 
-				acc1 = accuracy(outputs1, targets1)
-				acc2 = accuracy(outputs2, targets2)
-				acc_all = [(a1 + a2) / 2 for a1, a2 in zip(acc1, acc2)]
-				acc.update(acc_all[0].item(), inputs1.size(0))
+				a1 = accuracy(outputs1, targets1)
+				a2 = accuracy(outputs2, targets2)
+				acc1.update(a1[0].item(), inputs1.size(0))
+				acc2.update(a2[0].item(), inputs2.size(0))
 
 				batch_time = time.time() - end
 				end = time.time()
@@ -226,7 +265,8 @@ class Trainer:
 							["eta: {eta}",
 							 "iter [{epoch}][{idx}/{iter}]",
 							 "loss {loss_val:.4f} ({loss_avg:.4f})",
-							 "accuracy {acc_val:.4f} ({acc_avg:.4f})"]
+							 "accuracy1 {acc1_val:.4f} ({acc1_avg:.4f})",
+							 "accuracy2 {acc2_val:.4f} ({acc2_avg:.4f})",]
 						 ).format(
 						 		eta=eta_string,
 							    epoch=epoch+1,
@@ -234,11 +274,13 @@ class Trainer:
 							    iter=max_iter,
 							    loss_val=losses.val,
 							    loss_avg=losses.avg,
-							    acc_val=acc.val,
-							    acc_avg=acc.avg)
+							    acc1_val=acc1.val,
+							    acc1_avg=acc1.avg,
+							    acc2_val=acc2.val,
+							    acc2_avg=acc2.avg)
 					)
 
-		return losses.avg, acc.avg
+			return losses.avg, acc1.avg, acc2.avg
 
 	def val_one_epoch(self, epoch):
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Validation")
