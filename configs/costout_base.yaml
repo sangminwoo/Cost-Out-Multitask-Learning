@@ -21,4 +21,4 @@ SOLVER:
 ETC:
   WORKERS: 16
   VERBOSE: True
-  SEED: 0
+  SEED: 1

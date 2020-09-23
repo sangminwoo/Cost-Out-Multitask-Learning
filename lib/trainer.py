@@ -33,6 +33,7 @@ class Trainer:
 		self.start = 0
 		self.end = cfg.SOLVER.EPOCH
 		self.best_loss = np.inf
+		self.best_epoch = 0
 		self.best_acc1 = 0
 		self.best_acc2 = 0
 
@@ -87,14 +88,18 @@ class Trainer:
 			if not args.eval:
 				self.start = checkpoint['epoch']
 				self.end = self.end + self.start
+			# self.best_epoch = checkpoint['best_epoch']
 			self.best_loss = checkpoint['best_loss']
 			self.best_acc1 = checkpoint['best_acc1']
 			if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
 				self.best_acc2 = checkpoint['best_acc2']
 			self.model.load_state_dict(checkpoint['state_dict'])
 			self.optimizer.load_state_dict(checkpoint['optimizer'])
-			self.logger.info(f"=> loaded checkpoint: (epoch {self.start})")
-			self.logger.info(f"=> best loss: {self.best_loss:.4f}")
+			if not args.eval:
+				self.logger.info(f"=> loaded checkpoint: (epoch {self.start})")
+			else:
+				self.logger.info(f"=> loaded checkpoint: (epoch {self.end})")
+			self.logger.info(f"=> best loss: {self.best_loss:.4f} (epoch {self.best_epoch})")
 			self.logger.info(f"=> best acc1: {self.best_acc1:.4f}")
 			if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
 				self.best_acc2 = checkpoint['best_acc2']
@@ -112,6 +117,7 @@ class Trainer:
 
 				state = {'epoch': epoch + 1,
 						 'state_dict': self.model.state_dict(),
+						 'best_epoch': self.best_epoch,
 						 'best_loss': self.best_loss,
 						 'best_acc': self.best_acc,
 						 'optimizer': self.optimizer.state_dict()}
@@ -120,6 +126,7 @@ class Trainer:
 					torch.save(state, os.path.join(self.save, 'checkpoint_{}.pth.tar'.format(epoch)))
 
 				if loss < self.best_loss:
+					self.best_epoch = epoch+1
 					self.best_loss = loss
 					self.best_acc1 = acc
 					torch.save(state, os.path.join(self.save, 'best_loss.pth.tar'))
@@ -132,7 +139,7 @@ class Trainer:
 			self.logger.info("---------------------------------------"*2)
 			self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 			self.logger.info(f"=> Total Epoch: {self.end}")
-			self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
+			self.logger.info(f"=> Best Loss: {self.best_loss:.4f} (epoch {self.best_epoch})")
 			self.logger.info(f"=> Best Acc: {self.best_acc1:.4f}")
 			self.logger.info('---------------------------------------'*2)
 		else:
@@ -142,6 +149,7 @@ class Trainer:
 
 				state = {'epoch': epoch + 1,
 						 'state_dict': self.model.state_dict(),
+						 'best_epoch': self.best_epoch,
 						 'best_loss': self.best_loss,
 						 'best_acc1': self.best_acc1,
 						 'best_acc2': self.best_acc2,
@@ -151,6 +159,7 @@ class Trainer:
 					torch.save(state, os.path.join(self.save, 'checkpoint_{}.pth.tar'.format(epoch)))
 
 				if loss < self.best_loss:
+					self.best_epoch = epoch+1
 					self.best_loss = loss
 					self.best_acc1 = acc1
 					self.best_acc2 = acc2
@@ -165,7 +174,7 @@ class Trainer:
 			self.logger.info("---------------------------------------"*2)
 			self.logger.info(f"=> Elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
 			self.logger.info(f"=> Total Epoch: {self.end}")
-			self.logger.info(f"=> Best Loss: {self.best_loss:.4f}")
+			self.logger.info(f"=> Best Loss: {self.best_loss:.4f} (epoch {self.best_epoch})")
 			self.logger.info(f"=> Best Acc1: {self.best_acc1:.4f}")
 			self.logger.info(f"=> Best Acc2: {self.best_acc2:.4f}")
 			self.logger.info('---------------------------------------'*2)		
@@ -407,7 +416,7 @@ class Trainer:
 				self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
 				self.logger.info("---------------------------------------"*2)
 				self.logger.info(f"=> Loss: {losses.avg:.4f}")
-				self.logger.info(f"=> Acc1: {acc1.avg:.4f}")
+				self.logger.info(f"=> Acc: {acc1.avg:.4f}")
 				self.logger.info('---------------------------------------'*2)
 
 			else:
