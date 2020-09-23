@@ -16,36 +16,23 @@ class MLP(nn.Module):
             input_linear = nn.Linear(input_size, hidden_size)
             mlp_linear = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
 
-            self.filter1 = [
-                nn.ParameterDict({
-                    'weight': nn.Parameter(torch.Tensor(1), requires_grad=True),
-                    'bias': nn.Parameter(torch.Tensor(1), requires_grad=True)
-                }) for _ in range(num_layers)
-            ]
-            self.filter2 = [
-                nn.ParameterDict({
-                    'weight': nn.Parameter(torch.Tensor(1), requires_grad=True),
-                    'bias': nn.Parameter(torch.Tensor(1), requires_grad=True)
-                }) for _ in range(num_layers)
-            ]
-
             self.linear1 = nn.Linear(input_size, hidden_size)
-            self.linear1.weight = nn.Parameter(input_linear.weight + self.filter1[0].weight)
-            self.linear1.bias = nn.Parameter(input_linear.bias + self.filter1[0].bias)
+            self.linear1.weight = nn.Parameter(self.linear1.weight + torch.Tensor(1), requires_grad=True)
+            self.linear1.bias = nn.Parameter(self.linear1.bias + torch.Tensor(1), requires_grad=True)
 
             self.linear2 = nn.Linear(input_size, hidden_size)
-            self.linear2.weight = nn.Parameter(input_linear.weight + self.filter2[0].weight)
-            self.linear2.bias = nn.Parameter(input_linear.bias + self.filter2[0].bias)
+            self.linear2.weight = nn.Parameter(self.linear2.weight + torch.Tensor(1), requires_grad=True)
+            self.linear2.bias = nn.Parameter(self.linear2.bias + torch.Tensor(1), requires_grad=True)
 
             self.mlp_linear1 = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
             for i in range(num_layers-1):
-                self.mlp_linear1[i].weight = nn.Parameter(mlp_linear[i].weight + self.filter1[i+1].weight)
-                self.mlp_linear1[i].bias = nn.Parameter(mlp_linear[i].bias + self.filter1[i+1].weight)
+                self.mlp_linear1[i].weight = nn.Parameter(self.mlp_linear1[i].weight + torch.Tensor(1), requires_grad=True)
+                self.mlp_linear1[i].bias = nn.Parameter(self.mlp_linear1[i].bias + torch.Tensor(1), requires_grad=True)
 
             self.mlp_linear2 = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
             for i in range(num_layers-1):
-                self.mlp_linear2[i].weight = nn.Parameter(mlp_linear[i].weight + self.filter2[i+1].weight)
-                self.mlp_linear2[i].bias = nn.Parameter(mlp_linear[i].bias + self.filter2[i+1].weight)
+                self.mlp_linear2[i].weight = nn.Parameter(self.mlp_linear2[i].weight + torch.Tensor(1), requires_grad=True)
+                self.mlp_linear2[i].bias = nn.Parameter(self.mlp_linear2[i].bias + torch.Tensor(1), requires_grad=True)
 
         self.input1 = nn.Sequential(
                         self.linear1,
@@ -77,8 +64,8 @@ class MLP(nn.Module):
                             ) for i in range(num_layers-1)
                         ])
 
-        self.out1 = nn.Linear(hidden_size, output_size1)
-        self.out2 = nn.Linear(hidden_size, output_size2)
+        self.output1 = nn.Linear(hidden_size, output_size1)
+        self.output2 = nn.Linear(hidden_size, output_size2)
         # self.softmax = nn.Softmax(dim=1)
 
         # for m in self.modules():
@@ -102,9 +89,9 @@ class MLP(nn.Module):
             for mlp2 in self.mlp2:
                 x2 = mlp2(x2)
 
-        out1 = self.out1(x1)
+        out1 = self.output1(x1)
         # out1 = self.softmax(out1)
-        out2 = self.out2(x2)
+        out2 = self.output2(x2)
         # out2 = self.softmax(out2)
         return out1, out2
 
