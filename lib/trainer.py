@@ -60,14 +60,16 @@ class Trainer:
 		# Model
 		if self.mode == 'st_baseline':		
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1=='mnist' else 3*224*224, hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+				self.model = build_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1 in ['mnist', 'fashion_mnist'] else 3*224*224,
+						hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
 				self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, pretrained=False, num_classes=cfg.DATASET.NUM_CLASSES1)
 			else:
 				pass
 		else:			
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mt_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1=='mnist' else 3*224*224, hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
+				self.model = build_mt_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1 in ['mnist', 'fashion_mnist'] else 3*224*224,
+						hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
 				self.model = build_mt_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes1=cfg.DATASET.NUM_CLASSES1, num_classes2=cfg.DATASET.NUM_CLASSES2)
 			else:
@@ -102,7 +104,7 @@ class Trainer:
 			self.logger.info(f"=> best loss: {self.best_loss:.4f} (epoch {self.best_epoch})")
 			self.logger.info(f"=> best acc1: {self.best_acc1:.4f}")
 			if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
-				self.best_acc2 = checkpoint['best_acc2']
+				self.logger.info(f"=> best acc2: {self.best_acc2:.4f}")
 
 	def train(self):
 		self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
@@ -412,7 +414,7 @@ class Trainer:
 				
 				self.logger.info('---------------------------------------'*2)
 				self.logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Evaluation finished!")
-				self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}, Dataset2: {self.cfg.DATASET.DATA2}")
+				self.logger.info(f"Dataset1: {self.cfg.DATASET.DATA1}")
 				self.logger.info(f"Model: {self.cfg.MODEL.BASE_MODEL}, Mode: {self.mode}")
 				self.logger.info("---------------------------------------"*2)
 				self.logger.info(f"=> Loss: {losses.avg:.4f}")
