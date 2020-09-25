@@ -15,7 +15,9 @@ _C.DATASET.TEST_BATCH_SIZE = 64
 """======================================="""
 _C.MODEL = CfgNode()
 _C.MODEL.BASE_MODEL = "resnet18" # 'mlp, resnet18, 50, 101'
-_C.MODEL.CHECKPOINT = "checkpoint_99.pth.tar" # model to resume
+_C.MODEL.NUM_LAYERS = 5
+_C.MODEL.HIDDEN_SIZE = 128
+_C.MODEL.CHECKPOINT = "best_loss.pth.tar" # model to resume
 _C.MODEL.CONVERGENCE_THRESHOLD = 1e-4
 
 """======================================="""

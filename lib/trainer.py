@@ -38,7 +38,7 @@ class Trainer:
 		self.best_acc2 = 0
 
 		# Dataset / DataLoader
-		dataset1 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA1),
+		dataset1, data_shape1 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA1),
 							   dataset=cfg.DATASET.DATA1,
 							   phase='train' if not args.eval else 'test')
 		self.dataloader1 = DataLoader(dataset1,
@@ -48,7 +48,7 @@ class Trainer:
 									  pin_memory=True)
 
 		if self.mode in ['mt_baseline', 'mt_filter', 'mt_costout']:
-			dataset2 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA2),
+			dataset2, data_shape2 = get_dataset(root=os.path.join(cfg.DATASET.PATH, cfg.DATASET.DATA2),
 								   dataset=cfg.DATASET.DATA2,
 								   phase='train' if not args.eval else 'test')
 			self.dataloader2 = DataLoader(dataset2,
@@ -57,23 +57,54 @@ class Trainer:
 										  num_workers=cfg.ETC.WORKERS,
 										  pin_memory=True)
 
+			assert data_shape1 == data_shape2, 'data shape should be the same'
 		# Model
 		if self.mode == 'st_baseline':		
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1 in ['mnist', 'fashion_mnist'] else 3*224*224,
-						hidden_size=128, output_size=cfg.DATASET.NUM_CLASSES1, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
-			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
-				self.model = build_resnet(args, arch=cfg.MODEL.BASE_MODEL, pretrained=False, num_classes=cfg.DATASET.NUM_CLASSES1)
-			else:
-				pass
+				self.model = build_mlp(args,
+									   num_layers=cfg.MODEL.NUM_LAYERS,
+									   input_size=data_shape1[0]*data_shape1[1]*data_shape1[2],
+									   hidden_size=cfg.MODEL.HIDDEN_SIZE,
+									   output_size=cfg.DATASET.NUM_CLASSES1,
+									   bn_momentum=cfg.SOLVER.BN_MOMENTUM,
+									   dropout=cfg.SOLVER.DROPOUT)
+			elif cfg.MODEL.BASE_MODEL == 'cnn':
+				self.model = build_cnn(args,
+									   num_layers=cfg.MODEL.NUM_LAYERS,
+									   input_channel=data_shape[0],
+									   hidden_channel=cfg.MODEL.HIDDEN_SIZE,
+									   output_size=cfg.DATASET.NUM_CLASSES1,
+									   bn_momentum=cfg.SOLVER.BN_MOMENTUM,
+									   dropout=cfg.SOLVER.DROPOUT)
+			else: # ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
+				self.model = build_resnet(args,
+										  arch=cfg.MODEL.BASE_MODEL,
+										  pretrained=False,
+										  num_classes=cfg.DATASET.NUM_CLASSES1)
 		else:			
 			if cfg.MODEL.BASE_MODEL == 'mlp':
-				self.model = build_mt_mlp(args, num_layers=5, input_size=1*28*28 if cfg.DATASET.DATA1 in ['mnist', 'fashion_mnist'] else 3*224*224,
-						hidden_size=128, output_size1=cfg.DATASET.NUM_CLASSES1, output_size2=cfg.DATASET.NUM_CLASSES2, bn_momentum=cfg.SOLVER.BN_MOMENTUM, dropout=cfg.SOLVER.DROPOUT)
-			elif cfg.MODEL.BASE_MODEL in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
-				self.model = build_mt_resnet(args, arch=cfg.MODEL.BASE_MODEL, num_classes1=cfg.DATASET.NUM_CLASSES1, num_classes2=cfg.DATASET.NUM_CLASSES2)
-			else:
-				pass
+				self.model = build_mt_mlp(args,
+										  num_layers=cfg.MODEL.NUM_LAYERS,
+										  input_size=data_shape1[0]*data_shape1[1]*data_shape1[2],
+										  hidden_size=cfg.MODEL.HIDDEN_SIZE,
+										  output_size1=cfg.DATASET.NUM_CLASSES1,
+										  output_size2=cfg.DATASET.NUM_CLASSES2,
+										  bn_momentum=cfg.SOLVER.BN_MOMENTUM,
+										  dropout=cfg.SOLVER.DROPOUT)
+			elif cfg.MODEL.BASE_MODEL == 'cnn':
+				self.model = build_cnn(args,
+									   num_layers=cfg.MODEL.NUM_LAYERS,
+									   input_channel=data_shape[0],
+									   hidden_channel=cfg.MODEL.HIDDEN_SIZE,
+									   output_size1=cfg.DATASET.NUM_CLASSES1,
+									   output_size2=cfg.DATASET.NUM_CLASSES2,
+									   bn_momentum=cfg.SOLVER.BN_MOMENTUM,
+									   dropout=cfg.SOLVER.DROPOUT)
+			else: # ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']:
+				self.model = build_mt_resnet(args,
+											 arch=cfg.MODEL.BASE_MODEL,
+											 num_classes1=cfg.DATASET.NUM_CLASSES1,
+											 num_classes2=cfg.DATASET.NUM_CLASSES2)
 		self.model = nn.DataParallel(self.model.to(self.device))
 
 		# Criterion & Optimizer

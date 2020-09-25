@@ -13,9 +13,6 @@ class MLP(nn.Module):
         self.mlp_linear2 = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
 
         if args.mode == 'mt_filter':
-            input_linear = nn.Linear(input_size, hidden_size)
-            mlp_linear = nn.ModuleList([nn.Linear(hidden_size, hidden_size) for _ in range(num_layers-1)])
-
             self.linear1 = nn.Linear(input_size, hidden_size)
             self.linear1.weight = nn.Parameter(self.linear1.weight + torch.Tensor(1), requires_grad=True)
             self.linear1.bias = nn.Parameter(self.linear1.bias + torch.Tensor(1), requires_grad=True)
@@ -46,7 +43,7 @@ class MLP(nn.Module):
                         nn.ReLU(True),
                         nn.Dropout(p=dropout)
                     )
-        if self.layers > 2:
+        if self.layers >= 2:
             self.mlp1 = nn.ModuleList([
                             nn.Sequential(
                                 self.mlp_linear1[i],
@@ -80,12 +77,12 @@ class MLP(nn.Module):
             x2 = x2.view(x2.size(0), -1)
 
         x1 = self.input1(x1)
-        if self.layers > 2:
+        if self.layers >= 2:
             for mlp1 in self.mlp1:
                 x1 = mlp1(x1)
 
         x2 = self.input2(x2)
-        if self.layers > 2:
+        if self.layers >= 2:
             for mlp2 in self.mlp2:
                 x2 = mlp2(x2)
 
@@ -97,10 +94,3 @@ class MLP(nn.Module):
 
 def build_mt_mlp(args, num_layers, input_size, hidden_size, output_size1, output_size2, bn_momentum, dropout):
     return MLP(args, num_layers, input_size, hidden_size, output_size1, output_size2, bn_momentum, dropout)
-
-
-if __name__ == '__main__':
-    x = torch.randn(3, 10)
-    mlp = build_mlp(2, 10, 10, 10, 1e-3, 0.)
-    out = mlp(x)
-    print(out)

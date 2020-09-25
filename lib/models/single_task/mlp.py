@@ -13,7 +13,7 @@ class MLP(nn.Module):
                         nn.ReLU(True),
                         nn.Dropout(p=dropout)
                     )
-        if self.layers > 2:
+        if self.layers >= 2:
             self.mlp = nn.ModuleList([
                             nn.Sequential(
                                 nn.Linear(hidden_size, hidden_size),
@@ -26,22 +26,22 @@ class MLP(nn.Module):
         self.output = nn.Linear(hidden_size, output_size)
         self.softmax = nn.Softmax(dim=1)
 
-        for m in self.modules():
-            if isinstance(m, nn.Linear):
-                m.weight.data = nn.init.xavier_uniform_(m.weight.data, gain=nn.init.calculate_gain('tanh'))
-                m.bias.data = nn.init.constant_(m.bias.data, 0.0)
+        # for m in self.modules():
+        #     if isinstance(m, nn.Linear):
+        #         m.weight.data = nn.init.xavier_uniform_(m.weight.data, gain=nn.init.calculate_gain('tanh'))
+        #         m.bias.data = nn.init.constant_(m.bias.data, 0.0)
 
     def forward(self, x):
         if len(x.shape) > 2:
             x = x.view(x.size(0), -1)
 
         x = self.input(x)
-        if self.layers > 2:
+        if self.layers >= 2:
             for mlp in self.mlp:
                 x = mlp(x)
 
         x = self.output(x)
-        out = self.softmax(x)
+        # out = self.softmax(x)
         return out
 
 def build_mlp(args, num_layers, input_size, hidden_size, output_size, bn_momentum, dropout):
