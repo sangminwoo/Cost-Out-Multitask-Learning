@@ -40,8 +40,8 @@ class MLP(nn.Module):
             for mlp in self.mlp:
                 x = mlp(x)
 
-        x = self.output(x)
-        # out = self.softmax(x)
+        out = self.output(x)
+        # out = self.softmax(out)
         return out
 
 def build_mlp(args, num_layers, input_size, hidden_size, output_size, bn_momentum, dropout):

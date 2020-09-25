@@ -12,9 +12,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 # Model
 from lib.models.single_task.mlp import build_mlp
+from lib.models.single_task.cnn import build_cnn
 from lib.models.single_task.resnet import build_resnet
 from lib.models.multi_task.mlp_multitask import build_mt_mlp
+from lib.models.multi_task.cnn_multitask import build_mt_cnn
 from lib.models.multi_task.resnet_multitask import build_mt_resnet
+
 # Dataset
 from lib.dataset import get_dataset
 # Train
@@ -71,8 +74,8 @@ class Trainer:
 			elif cfg.MODEL.BASE_MODEL == 'cnn':
 				self.model = build_cnn(args,
 									   num_layers=cfg.MODEL.NUM_LAYERS,
-									   input_channel=data_shape[0],
-									   hidden_channel=cfg.MODEL.HIDDEN_SIZE,
+									   input_shape=data_shape1,
+									   channel_size=cfg.MODEL.HIDDEN_SIZE,
 									   output_size=cfg.DATASET.NUM_CLASSES1,
 									   bn_momentum=cfg.SOLVER.BN_MOMENTUM,
 									   dropout=cfg.SOLVER.DROPOUT)
@@ -94,8 +97,8 @@ class Trainer:
 			elif cfg.MODEL.BASE_MODEL == 'cnn':
 				self.model = build_cnn(args,
 									   num_layers=cfg.MODEL.NUM_LAYERS,
-									   input_channel=data_shape[0],
-									   hidden_channel=cfg.MODEL.HIDDEN_SIZE,
+									   input_shape=data_shape1,
+									   channel_size=cfg.MODEL.HIDDEN_SIZE,
 									   output_size1=cfg.DATASET.NUM_CLASSES1,
 									   output_size2=cfg.DATASET.NUM_CLASSES2,
 									   bn_momentum=cfg.SOLVER.BN_MOMENTUM,
@@ -152,7 +155,7 @@ class Trainer:
 						 'state_dict': self.model.state_dict(),
 						 'best_epoch': self.best_epoch,
 						 'best_loss': self.best_loss,
-						 'best_acc': self.best_acc,
+						 'best_acc1': self.best_acc1,
 						 'optimizer': self.optimizer.state_dict()}
 
 				if (epoch+1) % 10 == 0:

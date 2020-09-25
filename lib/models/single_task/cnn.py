@@ -4,28 +4,34 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
 class CNN(nn.Module):
-    def __init__(self, args, num_layers, input_channel, hidden_channel, output_channel1=100, output_channel2=1000, bn_momentum=1e-3, dropout=0.):
+    def __init__(self, args, num_layers, input_shape, channel_size, output_size=100, bn_momentum=1e-3, dropout=0.):
         super(CNN, self).__init__()
         self.layers = num_layers
         self.input = nn.Sequential(
-                        nn.Conv2d(input_channel, hidden_channel, kernel_channel=3, stride=1, padding=1),
-                        nn.BatchNorm2d(num_features=hidden_channel, momentum=bn_momentum),
+                        nn.Conv2d(input_shape[0], channel_size, kernel_size=3, stride=1, padding=1),
+                        nn.BatchNorm2d(num_features=channel_size, momentum=bn_momentum),
                         nn.ReLU(True),
                         nn.Dropout(p=dropout),
-                        nn.MaxPool2d(kernel_size=2, stride=1)
+                        nn.MaxPool2d(kernel_size=2, stride=2)
                     )
         if self.layers >= 2:
             self.cnn = nn.ModuleList([
                             nn.Sequential(
-                                nn.Conv2d(input_channel, hidden_channel, kernel_channel=3, stride=1, padding=1),
-                                nn.BatchNorm2d(num_features=hidden_channel, momentum=bn_momentum),
+                                nn.Conv2d(channel_size, channel_size, kernel_size=3, stride=1, padding=1),
+                                nn.BatchNorm2d(num_features=channel_size, momentum=bn_momentum),
                                 nn.ReLU(True),
                                 nn.Dropout(p=dropout),
-                                nn.MaxPool2d(kernel_size=2, stride=1)
+                                nn.MaxPool2d(kernel_size=2, stride=2)
                             ) for _ in range(num_layers-1)
                        ])
 
-        self.output = nn.Linear(hidden_channel, output_channel)
+        height = input_shape[1]
+        width = input_shape[2]
+        for _ in range(num_layers):
+            height = height // 2
+            width = width // 2
+
+        self.output = nn.Linear(height*width*channel_size, output_size)
         self.softmax = nn.Softmax(dim=1)
 
         # for m in self.modules():
@@ -40,9 +46,9 @@ class CNN(nn.Module):
                 x = cnn(x)
 
         x = x.view(x.size(0), -1)
-        x = self.output(x)
-        # out = self.softmax(x)
+        out = self.output(x)
+        # out = self.softmax(out)
         return out
 
-def build_cnn(args, num_layers, input_channel, hidden_channel, output_channel, bn_momentum, dropout):
-    return CNN(args, num_layers, input_channel, hidden_channel, output_channel, bn_momentum, dropout)
+def build_cnn(args, num_layers, input_shape, channel_size, output_size, bn_momentum, dropout):
+    return CNN(args, num_layers, input_shape, channel_size, output_size, bn_momentum, dropout)
