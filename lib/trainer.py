@@ -95,7 +95,7 @@ class Trainer:
 										  bn_momentum=cfg.SOLVER.BN_MOMENTUM,
 										  dropout=cfg.SOLVER.DROPOUT)
 			elif cfg.MODEL.BASE_MODEL == 'cnn':
-				self.model = build_cnn(args,
+				self.model = build_mt_cnn(args,
 									   num_layers=cfg.MODEL.NUM_LAYERS,
 									   input_shape=data_shape1,
 									   channel_size=cfg.MODEL.HIDDEN_SIZE,

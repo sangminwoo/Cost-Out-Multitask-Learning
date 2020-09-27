@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
 def get_dataset(root, dataset, phase):
-	assert dataset in ['mnist', 'cifar10', 'cifar100', 'imagenet']
 	assert phase in ['train', 'val', 'test']
 	
 	if dataset == 'mnist': # 60000x28x28
@@ -19,6 +18,16 @@ def get_dataset(root, dataset, phase):
 							# transforms.Normalize(mean=MEAN, std=STD)])
 
 		dataset = datasets.MNIST(root=root, train=False if phase=='test' else True,
+								 transform=transform, download=True if not os.path.exists(root) else False)
+
+	elif dataset == 'fashion_mnist': # 60000x28x28
+		shape = (1,28,28)
+
+		transform = transforms.Compose([
+							transforms.ToTensor()])
+							# transforms.Normalize(mean=MEAN, std=STD)])
+
+		dataset = datasets.FashionMNIST(root=root, train=False if phase=='test' else True,
 								 transform=transform, download=True if not os.path.exists(root) else False)
 
 	elif dataset == 'cifar10': # 60000x32x32
