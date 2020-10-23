@@ -38,8 +38,9 @@ def get_arguments():
 	parser.add_argument('--epoch', type=int, help='the number of epochs', default=1000)
 	parser.add_argument('--batch', type=int, help='batch size', default=128)
 	parser.add_argument('--len', type=int, help='sequence length', default=10)
-	parser.add_argument('--layers', type=int, help='the number of layers', default=10)
-	parser.add_argument('--dim', type=int, help='size of hidden dimension', default=1024)
+	parser.add_argument('--layers', type=int, help='the number of layers', default=2)
+	parser.add_argument('--in_dim', type=int, help='size of input dimension', default=64)
+	parser.add_argument('--hid_dim', type=int, help='size of hidden dimension', default=1024)
 	parser.add_argument('--seed', type=int, help='random seed', default=0)
 	args = parser.parse_args()
 	return args
@@ -73,7 +74,7 @@ class AverageMeter:
         self.avg = self.sum / self.count
 
 class BinaryPredictor(nn.Module):
-	def __init__(self, mode='mt', seq_len=10, num_layers=10, hidden_dim=1024, dropout=.0, sigmoid=True):
+	def __init__(self, mode='mt', seq_len=10, num_layers=10, input_dim=16, hidden_dim=1024, dropout=.0, sigmoid=True):
 		super(BinaryPredictor, self).__init__()
 		self.mode = mode
 		self.seq_len = seq_len
@@ -81,20 +82,22 @@ class BinaryPredictor(nn.Module):
 		self.num_layers = num_layers
 		self.sigmoid = sigmoid
 
+		self.input_embed = nn.Embedding(num_embeddings=2**seq_len, embedding_dim=input_dim)
+
 		self.st_input = nn.ModuleList([
 							nn.Sequential(
-								nn.Linear(1, hidden_dim),
+								nn.Linear(input_dim, hidden_dim),
 		                        nn.BatchNorm1d(hidden_dim),
 		                        nn.ReLU(True),
 		                        nn.Dropout(p=dropout)
 		                   	) for _ in range(self.seq_len)
 						])
 		self.mt_input = nn.Sequential(
-							 nn.Linear(1, hidden_dim),
-	                         nn.BatchNorm1d(hidden_dim),
-	                         nn.ReLU(True),
-	                         nn.Dropout(p=dropout)
-	                   	)
+							nn.Linear(input_dim, hidden_dim),
+		                    nn.BatchNorm1d(hidden_dim),
+		                    nn.ReLU(True),
+		                    nn.Dropout(p=dropout)
+		               	)
 
 		if self.num_layers >= 2:
 			self.st_hidden = nn.ModuleList([
@@ -119,7 +122,13 @@ class BinaryPredictor(nn.Module):
 		self.st_output = nn.ModuleList([nn.Linear(hidden_dim, 1) for _ in range(self.seq_len)])
 		self.mt_output = nn.Linear(hidden_dim, self.seq_len)
 
+		# for m in self.modules():
+		# 	if isinstance(m, nn.Linear):
+		# 		nn.init.kaiming_uniform_(m.weight)
+		# 		nn.init.kaiming_uniform_(m.bias)
+
 	def forward(self, x):
+		x = self.input_embed(x)
 		if self.mode == 'st':
 			out = []
 			for i in range(self.seq_len):
@@ -149,25 +158,27 @@ if __name__ == '__main__':
 	logger = setup_logger(name=args.mode, save_dir='logs', filename='{}_binary_predictor_{}.txt'.format(get_timestamp(), args.mode))
 	logger = logging.getLogger(args.mode)
 		
-	model = BinaryPredictor(mode=args.mode, seq_len=args.len, num_layers=args.layers, hidden_dim=args.dim, dropout=0., sigmoid=True)
-	input_nums = torch.arange(num_seq).float().reshape(-1, 1)
+	model = BinaryPredictor(mode=args.mode, seq_len=args.len, num_layers=args.layers, input_dim=args.in_dim,
+							hidden_dim=args.hid_dim, dropout=0., sigmoid=True)
+	input_nums = torch.arange(num_seq)#.float().reshape(-1, 1)
 	target_nums = random_number_generator(seq_len=args.len)
 
 	dataloader = DataLoader(TensorDataset(input_nums, target_nums), batch_size=args.batch, shuffle=True, num_workers=8)
 
 	criterion = nn.L1Loss()
-	optimizer = torch.optim.SGD(model.parameters(), lr=args.lr)
+	optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
 	
 	model = nn.DataParallel(model, device_ids=[0,1,2,3])
 	model = model.cuda()
 	model.train()
 
+	losses = AverageMeter()
 	best_loss = np.inf
 
 	logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
 	start_time = time.time()
+
 	for epoch in range(args.epoch):
-		losses = AverageMeter()
 		for idx, (input, target) in enumerate(dataloader):
 			input = input.cuda()
 			target = target.cuda()
@@ -178,18 +189,25 @@ if __name__ == '__main__':
 			optimizer.step()
 			losses.update(loss.item(), input.size(0))
 
-			if losses.avg < best_loss:
-				best_loss = loss
+			if losses.val < best_loss:
+				best_loss_epoch = epoch+1
+				best_loss = losses.val
 
 			delimeter = "   "
 			logger.info(
 				delimeter.join(
 					["iter [{epoch}][{idx}/{iter}]",
+					 # "input {input}",
+					 # "output {output}",
+					 # "target {target}",
 					 "loss {loss_val:.4f} ({loss_avg:.4f})"]
 				 ).format(
-					    epoch=epoch+1,
-					    idx=idx,
-					    iter=len(dataloader),	
+						epoch=epoch+1,
+						idx=idx,
+						iter=len(dataloader),
+						# input=input,
+						# output=output,
+						# target=target,	
 					    loss_val=losses.val,
 					    loss_avg=losses.avg)
 			)
@@ -199,5 +217,5 @@ if __name__ == '__main__':
 	logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training finished!")
 	logger.info(f"elapsed time: {time.strftime('%H:%M:%S', time.gmtime(elapsed))}")
 	logger.info(f"epoch:{args.epoch}")
-	logger.info(f"best_loss:{best_loss}")
+	logger.info(f"best_loss:{best_loss:.4f} in {best_loss_epoch}th epoch")
 	logger.info('---------------------------------------'*2)
