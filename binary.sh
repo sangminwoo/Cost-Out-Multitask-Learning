@@ -15,7 +15,10 @@ seed=0
 # python binary_predictor.py --mode 'st' --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
 
 # multitask baseline
-python binary_predictor.py --mode 'mt' --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
+# python binary_predictor.py --mode 'mt' --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
+
+# residual
+# python binary_predictor.py --mode 'mt' --residual --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
 
 # per-task filter
 # python binary_predictor.py --mode 'mt' --filter --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
@@ -24,7 +27,7 @@ python binary_predictor.py --mode 'mt' --p_lossdrop ${p_lossdrop} --lr ${lr} --e
 # python binary_predictor.py --mode 'mt' --lossdrop --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
 
 # both 
-# python binary_predictor.py --mode 'mt' --filter --lossdrop --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
+python binary_predictor.py --mode 'mt' --filter --lossdrop --p_lossdrop ${p_lossdrop} --lr ${lr} --epoch ${epoch} --batch ${batch} --len ${len} --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}
 
 # multi-mode
 # python binary_predictor.py --mode 'st' --lr 1e-1 --epoch ${epoch} --batch ${batch} --len 10 --layers ${layers} --in_dim ${in_dim} --hid_dim ${hid_dim} --seed ${seed}

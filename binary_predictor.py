@@ -120,7 +120,8 @@ class MTBinaryPredictor(nn.Module):
 				 sigmoid=True,
 				 pertask_filter=False,
 				 lossdrop=False,
-				 p_lossdrop=.0):
+				 p_lossdrop=.0,
+				 residual=False):
 
 		super(MTBinaryPredictor, self).__init__()
 		self.seq_len = seq_len
@@ -129,12 +130,13 @@ class MTBinaryPredictor(nn.Module):
 		self.pertask_filter = pertask_filter
 		self.lossdrop = lossdrop
 		self.p_lossdrop = p_lossdrop
+		self.residual = residual
 
 		self.input_embed = nn.Embedding(num_embeddings=2**self.seq_len, embedding_dim=input_dim)
 
 		if pertask_filter:
-			self.weight_filters = [nn.ParameterList([nn.Parameter(torch.Tensor(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
-			self.bias_filters = [nn.ParameterList([nn.Parameter(torch.Tensor(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
+			self.weight_filters = [nn.ParameterList([nn.Parameter(torch.randn(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
+			self.bias_filters = [nn.ParameterList([nn.Parameter(torch.randn(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
 
 		self.mt_input = nn.Sequential(
 							nn.Linear(input_dim, hidden_dim),
@@ -167,25 +169,49 @@ class MTBinaryPredictor(nn.Module):
 			for j in range(self.seq_len):
 				# input layer
 				y = torch.mm(x, (self.mt_input[0].weight + self.weight_filters[0][j].to(device)).t()) + (self.mt_input[0].bias + self.bias_filters[0][j].to(device))
-			
+				y = nn.Sequential(*list(self.mt_input.children())[1:])(y)
+				res = y
+				# print(self.weight_filters[0][j].requires_grad)
+
 				# hidden layers
 				for i in range(self.num_layers-2):
-					y = torch.mm(y, (self.mt_hidden[i][0].weight + self.weight_filters[i][j].to(device)).t()) + (self.mt_hidden[i][0].bias + self.bias_filters[i][j].to(device))
+					y = torch.mm(y, (self.mt_hidden[i][0].weight + self.weight_filters[i+1][j].to(device)).t()) + (self.mt_hidden[i][0].bias + self.bias_filters[i+1][j].to(device))
+					y = nn.Sequential(*list(self.mt_hidden[i].children())[1:])(y)
 
 				# output layer
+				if self.residual:
+					y = y + res
 				y = torch.mm(y, (self.mt_output[j].weight + self.weight_filters[-1][j].to(device)).t()) + (self.mt_output[j].bias + self.bias_filters[-1][j].to(device))
 
 				z.append(y)
 
 			out = torch.cat(z, dim=1) # batch_size x seq_len
 		else:
+			# z = []
+			# for j in range(self.seq_len):
+			# 	# input layer
+			# 	y = torch.mm(x, self.mt_input[0].weight.t()) + self.mt_input[0].bias
+			# 	y = nn.Sequential(*list(self.mt_input.children())[1:])(y)
+
+			# 	# hidden layers
+			# 	for i in range(self.num_layers-2):
+			# 		y = torch.mm(y, self.mt_hidden[i][0].weight.t()) + self.mt_hidden[i][0].bias
+			# 		y = nn.Sequential(*list(self.mt_hidden[i].children())[1:])(y)
+
+			# 	# output layer
+			# 	y = torch.mm(y, self.mt_output[j].weight.t()) + self.mt_output[j].bias
+
+			# 	z.append(y)
+
+			# out = torch.cat(z, dim=1) # batch_size x seq_len
+
 			y = self.mt_input(x)
+			res = y
 			for hidden in self.mt_hidden:
 				y = hidden(y)
+			if self.residual:
+				y = y + res
 			out = self.mt_output(y)
-
-		if self.residual:
-			out += x
 
 		if self.lossdrop:
 			out = F.dropout(out, p=self.p_lossdrop, training=self.training)
@@ -198,6 +224,7 @@ if __name__ == '__main__':
 		parser.add_argument('--mode', type=str, help='single task (st); multi task (mt)', required=True)
 		parser.add_argument('--filter', action='store_true', help='use per-task filter', default=False)
 		parser.add_argument('--lossdrop', action='store_true', help='use loss-dropout', default=False)
+		parser.add_argument('--residual', action='store_true', help='use residual connection', default=False)
 		parser.add_argument('--p_lossdrop', type=float, help='percentage of loss-dropout', default=0.3)
 		parser.add_argument('--lr', type=float, help='learning rate', default=1e-3)
 		parser.add_argument('--epoch', type=int, help='the number of epochs', default=1000)
@@ -226,7 +253,8 @@ if __name__ == '__main__':
 	elif args.mode == 'mt':
 		model = MTBinaryPredictor(seq_len=args.len, num_layers=args.layers, input_dim=args.in_dim,
 								hidden_dim=args.hid_dim, dropout=0., sigmoid=True,
-								pertask_filter=args.filter, lossdrop=args.lossdrop, p_lossdrop=args.p_lossdrop)
+								pertask_filter=args.filter, lossdrop=args.lossdrop, p_lossdrop=args.p_lossdrop,
+								residual=args.residual)
 	input_nums = torch.arange(num_seq)#.float().reshape(-1, 1)
 	target_nums = random_number_generator(seq_len=args.len)
 
@@ -238,6 +266,7 @@ if __name__ == '__main__':
 	model = nn.DataParallel(model, device_ids=[0,1,2,3])
 	model = model.cuda()
 	model.train()
+	# print(model)
 
 	losses = AverageMeter()
 	best_loss = np.inf
