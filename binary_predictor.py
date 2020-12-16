@@ -31,20 +31,6 @@ def get_timestamp():
     st = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d-%H:%M:%S')
     return st
 
-def get_arguments():
-	parser = argparse.ArgumentParser(description='Binary Predictor')
-	parser.add_argument('--mode', type=str, help='st; mt', required=True)
-	parser.add_argument('--lr', type=float, help='learning rate', default=1e-3)
-	parser.add_argument('--epoch', type=int, help='the number of epochs', default=1000)
-	parser.add_argument('--batch', type=int, help='batch size', default=128)
-	parser.add_argument('--len', type=int, help='sequence length', default=10)
-	parser.add_argument('--layers', type=int, help='the number of layers', default=2)
-	parser.add_argument('--in_dim', type=int, help='size of input dimension', default=64)
-	parser.add_argument('--hid_dim', type=int, help='size of hidden dimension', default=1024)
-	parser.add_argument('--seed', type=int, help='random seed', default=0)
-	args = parser.parse_args()
-	return args
-
 def random_number_generator(seq_len=10):
 	dim = 2**seq_len
 	rand_num = np.arange(dim)
@@ -73,16 +59,20 @@ class AverageMeter:
         self.count += n
         self.avg = self.sum / self.count
 
-class BinaryPredictor(nn.Module):
-	def __init__(self, mode='mt', seq_len=10, num_layers=10, input_dim=16, hidden_dim=1024, dropout=.0, sigmoid=True):
-		super(BinaryPredictor, self).__init__()
-		self.mode = mode
+class STBinaryPredictor(nn.Module):
+	def __init__(self,
+				 seq_len=10,
+				 num_layers=10,
+				 input_dim=16,
+				 hidden_dim=1024,
+				 dropout=.0,
+				 sigmoid=True):
+
+		super(STBinaryPredictor, self).__init__()
 		self.seq_len = seq_len
-		self.num_seq = 2**seq_len
-		self.num_layers = num_layers
 		self.sigmoid = sigmoid
 
-		self.input_embed = nn.Embedding(num_embeddings=2**seq_len, embedding_dim=input_dim)
+		self.input_embed = nn.Embedding(num_embeddings=2**self.seq_len, embedding_dim=input_dim)
 
 		self.st_input = nn.ModuleList([
 							nn.Sequential(
@@ -92,14 +82,8 @@ class BinaryPredictor(nn.Module):
 		                        nn.Dropout(p=dropout)
 		                   	) for _ in range(self.seq_len)
 						])
-		self.mt_input = nn.Sequential(
-							nn.Linear(input_dim, hidden_dim),
-		                    nn.BatchNorm1d(hidden_dim),
-		                    nn.ReLU(True),
-		                    nn.Dropout(p=dropout)
-		               	)
 
-		if self.num_layers >= 2:
+		if num_layers >= 2:
 			self.st_hidden = nn.ModuleList([
 							  nn.ModuleList([
 								  nn.Sequential(
@@ -110,44 +94,122 @@ class BinaryPredictor(nn.Module):
 								  ) for _ in range(num_layers-2)
 							  ]) for _ in range(self.seq_len)
 						  ])
+
+		self.st_output = nn.ModuleList([nn.Linear(hidden_dim, 1) for _ in range(self.seq_len)])
+
+	def forward(self, x):
+		x = self.input_embed(x)
+		out = []
+		for i in range(self.seq_len):
+			y = self.st_input[i](x)	# input layer
+			for hidden in self.st_hidden[i]:
+				y = hidden(y)		# hidden layer
+			y = self.st_output[i](y)	# output layer
+			out.append(y)
+		out = torch.cat(out, dim=1)
+
+		return torch.sigmoid(out) if self.sigmoid else out
+
+class MTBinaryPredictor(nn.Module):
+	def __init__(self,
+				 seq_len=10,
+				 num_layers=10,
+				 input_dim=16,
+				 hidden_dim=1024,
+				 dropout=.0,
+				 sigmoid=True,
+				 pertask_filter=False,
+				 lossdrop=False,
+				 p_lossdrop=.0):
+
+		super(MTBinaryPredictor, self).__init__()
+		self.seq_len = seq_len
+		self.num_layers = num_layers
+		self.sigmoid = sigmoid
+		self.pertask_filter = pertask_filter
+		self.lossdrop = lossdrop
+		self.p_lossdrop = p_lossdrop
+
+		self.input_embed = nn.Embedding(num_embeddings=2**self.seq_len, embedding_dim=input_dim)
+
+		if pertask_filter:
+			self.weight_filters = [nn.ParameterList([nn.Parameter(torch.Tensor(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
+			self.bias_filters = [nn.ParameterList([nn.Parameter(torch.Tensor(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
+
+		self.mt_input = nn.Sequential(
+							nn.Linear(input_dim, hidden_dim),
+		                    nn.BatchNorm1d(hidden_dim),
+		                    nn.ReLU(True),
+		                    nn.Dropout(p=dropout)
+		               	)
+
+		if self.num_layers >= 2:
 			self.mt_hidden = nn.ModuleList([
 							  nn.Sequential(
 							  	  nn.Linear(hidden_dim, hidden_dim),
 								  nn.BatchNorm1d(hidden_dim),
 								  nn.ReLU(True),
 								  nn.Dropout(p=dropout)
-							  ) for _ in range(num_layers-2)
+							  ) for _ in range(self.num_layers-2)
 						  ])
 
-		self.st_output = nn.ModuleList([nn.Linear(hidden_dim, 1) for _ in range(self.seq_len)])
-		self.mt_output = nn.Linear(hidden_dim, self.seq_len)
-
-		# for m in self.modules():
-		# 	if isinstance(m, nn.Linear):
-		# 		nn.init.kaiming_uniform_(m.weight)
-		# 		nn.init.kaiming_uniform_(m.bias)
+		if self.pertask_filter:
+			self.mt_output = nn.ModuleList([nn.Linear(hidden_dim, 1) for _ in range(self.seq_len)])
+		else:
+			self.mt_output = nn.Linear(hidden_dim, self.seq_len)
 
 	def forward(self, x):
-		x = self.input_embed(x)
-		if self.mode == 'st':
-			out = []
-			for i in range(self.seq_len):
-				y = self.st_input[i](x)	# input layer
-				for hidden in self.st_hidden[i]:
-					y = hidden(y)		# hidden layer
-				y = self.st_output[i](y)	# output layer
-				out.append(y)
-			out = torch.cat(out, dim=1)
+		device = x.device
+		x = self.input_embed(x) # 512x16
 
-		elif self.mode == 'mt':
+		if self.pertask_filter:
+			z = []
+			for j in range(self.seq_len):
+				# input layer
+				y = torch.mm(x, (self.mt_input[0].weight + self.weight_filters[0][j].to(device)).t()) + (self.mt_input[0].bias + self.bias_filters[0][j].to(device))
+			
+				# hidden layers
+				for i in range(self.num_layers-2):
+					y = torch.mm(y, (self.mt_hidden[i][0].weight + self.weight_filters[i][j].to(device)).t()) + (self.mt_hidden[i][0].bias + self.bias_filters[i][j].to(device))
+
+				# output layer
+				y = torch.mm(y, (self.mt_output[j].weight + self.weight_filters[-1][j].to(device)).t()) + (self.mt_output[j].bias + self.bias_filters[-1][j].to(device))
+
+				z.append(y)
+
+			out = torch.cat(z, dim=1) # batch_size x seq_len
+		else:
 			y = self.mt_input(x)
 			for hidden in self.mt_hidden:
 				y = hidden(y)
 			out = self.mt_output(y)
 
+		if self.residual:
+			out += x
+
+		if self.lossdrop:
+			out = F.dropout(out, p=self.p_lossdrop, training=self.training)
+
 		return torch.sigmoid(out) if self.sigmoid else out
 
 if __name__ == '__main__':
+	def get_arguments():
+		parser = argparse.ArgumentParser(description='Binary Predictor')
+		parser.add_argument('--mode', type=str, help='single task (st); multi task (mt)', required=True)
+		parser.add_argument('--filter', action='store_true', help='use per-task filter', default=False)
+		parser.add_argument('--lossdrop', action='store_true', help='use loss-dropout', default=False)
+		parser.add_argument('--p_lossdrop', type=float, help='percentage of loss-dropout', default=0.3)
+		parser.add_argument('--lr', type=float, help='learning rate', default=1e-3)
+		parser.add_argument('--epoch', type=int, help='the number of epochs', default=1000)
+		parser.add_argument('--batch', type=int, help='batch size', default=128)
+		parser.add_argument('--len', type=int, help='sequence length (i.e., x-bit binary)', default=10)
+		parser.add_argument('--layers', type=int, help='the number of layers', default=2)
+		parser.add_argument('--in_dim', type=int, help='size of input dimension', default=64)
+		parser.add_argument('--hid_dim', type=int, help='size of hidden dimension', default=1024)
+		parser.add_argument('--seed', type=int, help='random seed', default=0)
+		args = parser.parse_args()
+		return args
+
 	args = get_arguments()
 	random.seed(args.seed)
 	np.random.seed(args.seed)
@@ -157,9 +219,14 @@ if __name__ == '__main__':
 	num_seq=2**args.len
 	logger = setup_logger(name=args.mode, save_dir='logs', filename='{}_binary_predictor_{}.txt'.format(get_timestamp(), args.mode))
 	logger = logging.getLogger(args.mode)
-		
-	model = BinaryPredictor(mode=args.mode, seq_len=args.len, num_layers=args.layers, input_dim=args.in_dim,
+	
+	if args.mode == 'st':
+		model = STBinaryPredictor(seq_len=args.len, num_layers=args.layers, input_dim=args.in_dim,
 							hidden_dim=args.hid_dim, dropout=0., sigmoid=True)
+	elif args.mode == 'mt':
+		model = MTBinaryPredictor(seq_len=args.len, num_layers=args.layers, input_dim=args.in_dim,
+								hidden_dim=args.hid_dim, dropout=0., sigmoid=True,
+								pertask_filter=args.filter, lossdrop=args.lossdrop, p_lossdrop=args.p_lossdrop)
 	input_nums = torch.arange(num_seq)#.float().reshape(-1, 1)
 	target_nums = random_number_generator(seq_len=args.len)
 
