@@ -13,6 +13,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 
+from attention import MultiHeadAttention
+from focal_loss import FocalLoss
+
 def setup_logger(name, save_dir, filename="log.txt"):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG) # DEBUG, INFO, ERROR, WARNING
@@ -121,7 +124,8 @@ class MTBinaryPredictor(nn.Module):
 				 pertask_filter=False,
 				 lossdrop=False,
 				 p_lossdrop=.0,
-				 residual=False):
+				 residual=False,
+				 adploss=False):
 
 		super(MTBinaryPredictor, self).__init__()
 		self.seq_len = seq_len
@@ -131,12 +135,13 @@ class MTBinaryPredictor(nn.Module):
 		self.lossdrop = lossdrop
 		self.p_lossdrop = p_lossdrop
 		self.residual = residual
+		self.adploss = adploss
 
 		self.input_embed = nn.Embedding(num_embeddings=2**self.seq_len, embedding_dim=input_dim)
 
 		if pertask_filter:
 			self.weight_filters = [nn.ParameterList([nn.Parameter(torch.randn(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
-			self.bias_filters = [nn.ParameterList([nn.Parameter(torch.randn(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
+			self.bias_filters = [nn.ParameterList([nn.Parameter(torch.zeros(1), requires_grad=True) for _ in range(self.seq_len)]) for _ in range(num_layers)]
 
 		self.mt_input = nn.Sequential(
 							nn.Linear(input_dim, hidden_dim),
@@ -159,6 +164,9 @@ class MTBinaryPredictor(nn.Module):
 			self.mt_output = nn.ModuleList([nn.Linear(hidden_dim, 1) for _ in range(self.seq_len)])
 		else:
 			self.mt_output = nn.Linear(hidden_dim, self.seq_len)
+
+		if self.adploss:
+			self.alpha = nn.Parameter(torch.ones(1, self.seq_len), requires_grad=True)
 
 	def forward(self, x):
 		device = x.device
@@ -216,16 +224,20 @@ class MTBinaryPredictor(nn.Module):
 		if self.lossdrop:
 			out = F.dropout(out, p=self.p_lossdrop, training=self.training)
 
+		if self.adploss:
+			out = out * self.alpha
+
 		return torch.sigmoid(out) if self.sigmoid else out
 
 if __name__ == '__main__':
 	def get_arguments():
 		parser = argparse.ArgumentParser(description='Binary Predictor')
 		parser.add_argument('--mode', type=str, help='single task (st); multi task (mt)', required=True)
-		parser.add_argument('--filter', action='store_true', help='use per-task filter', default=False)
-		parser.add_argument('--lossdrop', action='store_true', help='use loss-dropout', default=False)
-		parser.add_argument('--residual', action='store_true', help='use residual connection', default=False)
-		parser.add_argument('--p_lossdrop', type=float, help='percentage of loss-dropout', default=0.3)
+		parser.add_argument('--filter', action='store_true', help='use per-task filter')
+		parser.add_argument('--lossdrop', action='store_true', help='use loss-dropout')
+		parser.add_argument('--p_lossdrop', type=float, help='percentage of loss-dropout', default=0.)
+		parser.add_argument('--residual', action='store_true', help='use residual connection')
+		parser.add_argument('--adploss', action='store_true', help='use adaptive loss balancing')
 		parser.add_argument('--lr', type=float, help='learning rate', default=1e-3)
 		parser.add_argument('--epoch', type=int, help='the number of epochs', default=1000)
 		parser.add_argument('--batch', type=int, help='batch size', default=128)
@@ -254,13 +266,14 @@ if __name__ == '__main__':
 		model = MTBinaryPredictor(seq_len=args.len, num_layers=args.layers, input_dim=args.in_dim,
 								hidden_dim=args.hid_dim, dropout=0., sigmoid=True,
 								pertask_filter=args.filter, lossdrop=args.lossdrop, p_lossdrop=args.p_lossdrop,
-								residual=args.residual)
+								residual=args.residual, adploss=args.adploss)
 	input_nums = torch.arange(num_seq)#.float().reshape(-1, 1)
 	target_nums = random_number_generator(seq_len=args.len)
 
 	dataloader = DataLoader(TensorDataset(input_nums, target_nums), batch_size=args.batch, shuffle=True, num_workers=8)
 
 	criterion = nn.L1Loss()
+	# criterion = FocalLoss()
 	optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9)
 	
 	model = nn.DataParallel(model, device_ids=[0,1,2,3])
@@ -268,11 +281,14 @@ if __name__ == '__main__':
 	model.train()
 	# print(model)
 
+	logger.info(args)
+	logger.info("Start Training")
 	losses = AverageMeter()
 	best_loss = np.inf
-
-	logger.info(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} Training start!")
+	
+	time_meter = AverageMeter()
 	start_time = time.time()
+	end = time.time()
 
 	for epoch in range(args.epoch):
 		for idx, (input, target) in enumerate(dataloader):
@@ -289,6 +305,12 @@ if __name__ == '__main__':
 				best_loss_epoch = epoch+1
 				best_loss = losses.val
 
+			batch_time = time.time() - end
+			end = time.time()
+			time_meter.update(batch_time)
+			eta_seconds = time_meter.avg * len(dataloader) * (args.epoch - epoch)
+			eta_string = str(timedelta(seconds=int(eta_seconds)))
+
 			delimeter = "   "
 			logger.info(
 				delimeter.join(
@@ -296,7 +318,8 @@ if __name__ == '__main__':
 					 # "input {input}",
 					 # "output {output}",
 					 # "target {target}",
-					 "loss {loss_val:.4f} ({loss_avg:.4f})"]
+					 "loss {loss_val:.4f} ({loss_avg:.4f})",
+					 "eta: {eta}"]
 				 ).format(
 						epoch=epoch+1,
 						idx=idx,
@@ -305,7 +328,8 @@ if __name__ == '__main__':
 						# output=output,
 						# target=target,	
 					    loss_val=losses.val,
-					    loss_avg=losses.avg)
+					    loss_avg=losses.avg,
+					    eta=eta_string)
 			)
 
 	elapsed = time.time() - start_time
