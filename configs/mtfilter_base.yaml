@@ -7,8 +7,8 @@ DATASET:
   TRAIN_BATCH_SIZE: 128 #64
   TEST_BATCH_SIZE: 64
 MODEL:
-  BASE_MODEL: "mlp"
-  NUM_LAYERS: 5
+  BASE_MODEL: "cnn" # "mlp", "cnn", "resnet18"
+  NUM_LAYERS: 3
   HIDDEN_SIZE: 128
   CHECKPOINT: "checkpoint_99.pth.tar"
   CONVERGENCE_THRESHOLD: 1e-4

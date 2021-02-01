@@ -1,5 +1,5 @@
 DATASET:
-  DATA1: "mnist"
+  DATA1: "fashion_mnist"
   NUM_CLASSES1: 10
   PATH: "data/"
   TRAIN_BATCH_SIZE: 128 #64
