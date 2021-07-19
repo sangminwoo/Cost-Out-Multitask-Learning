@@ -1,7 +1,6 @@
 *.pyc
 *.npy
 *.tar
-*.png
 data/*
 dataset/*
 logs/*
